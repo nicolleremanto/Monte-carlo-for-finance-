@@ -30,6 +30,7 @@ avec un noyau gaussien de fenêtre h = 1.5 σ_loc(t, S0) sqrt(max(t, 1/4)) N^{-1
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -159,7 +160,6 @@ class LocalStochasticVol(Model):
             y += -0.5 * lp * lp * vp * dts[i] + lp * sq * zs
             v = v + self.kappa * (self.theta - vp) * dts[i] + self.xi * sq * zv
         lev_fn = LeverageFunction(np.asarray(L_times), np.asarray(L_grids), np.asarray(L_vals))
-        import dataclasses
         return dataclasses.replace(self, leverage=lev_fn)
 
     def simulate(self, grid: TimeGrid, z: np.ndarray, rng=None) -> Paths:

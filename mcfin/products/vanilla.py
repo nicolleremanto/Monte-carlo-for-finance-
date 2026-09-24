@@ -52,13 +52,15 @@ class BasketOption(Product):
     maturity: float
     weights: np.ndarray
     option_type: str = "call"
+    initial_levels: np.ndarray | None = None  # niveaux de référence figés (sinon spot en 0)
 
     @property
     def observation_times(self):
         return np.array([self.maturity])
 
     def payoff(self, paths: Paths) -> np.ndarray:
-        perf = paths.spot[:, -1, :] / paths.spot[:, 0, :]
+        ref = paths.spot[:, 0, :] if self.initial_levels is None else np.asarray(self.initial_levels)
+        perf = paths.spot[:, -1, :] / ref
         basket = perf @ np.asarray(self.weights, dtype=float)
         w = option_sign(self.option_type)
         return np.maximum(w * (basket - self.strike), 0.0) * paths.df(-1)
@@ -71,13 +73,15 @@ class RainbowOption(Product):
     maturity: float
     kind: str = "worst"
     option_type: str = "put"
+    initial_levels: np.ndarray | None = None
 
     @property
     def observation_times(self):
         return np.array([self.maturity])
 
     def payoff(self, paths: Paths) -> np.ndarray:
-        perf = paths.spot[:, -1, :] / paths.spot[:, 0, :]
+        ref = paths.spot[:, 0, :] if self.initial_levels is None else np.asarray(self.initial_levels)
+        perf = paths.spot[:, -1, :] / ref
         x = perf.min(axis=1) if self.kind == "worst" else perf.max(axis=1)
         w = option_sign(self.option_type)
         return np.maximum(w * (x - self.strike), 0.0) * paths.df(-1)

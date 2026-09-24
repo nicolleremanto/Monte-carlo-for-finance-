@@ -45,11 +45,13 @@ class MLMCResult:
 
 
 def mlmc(level_sampler: Callable, eps: float, M: int = 2, L_min: int = 2, L_max: int = 12,
-         n_initial: int = 10_000, seed: int = 0, alpha: float | None = None) -> MLMCResult:
+         n_initial: int = 10_000, seed: int = 0, alpha: float | None = 1.0) -> MLMCResult:
     """Algorithme adaptatif de Giles.
 
     ``level_sampler(l, n, rng) -> (Σ(P_l - P_{l-1}), Σ(P_l - P_{l-1})², coût)``
-    (au niveau 0 : P_0 seul).
+    (au niveau 0 : P_0 seul). ``alpha`` = ordre faible du schéma (1 pour
+    Euler et Milstein) ; None => estimé par régression sur les niveaux
+    (instable quand les moyennes des corrections sont dominées par le bruit).
     """
     rng = np.random.default_rng(seed)
     sums = [np.zeros(3) for _ in range(L_max + 1)]

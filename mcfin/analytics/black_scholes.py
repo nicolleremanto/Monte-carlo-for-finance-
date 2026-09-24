@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.special import ndtr
-from scipy.stats import norm
 
 __all__ = ["option_sign", "black_price", "bs_price", "bs_greeks",
            "bs_digital_price", "bachelier_price", "black_implied_vol",

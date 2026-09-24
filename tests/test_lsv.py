@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from mcfin import EuropeanOption, LocalStochasticVol, MonteCarloEngine, SSVISurface, Cliquet, LocalVol
+from mcfin import EuropeanOption, LocalStochasticVol, MonteCarloEngine, SSVISurface
 from mcfin.analytics import implied_vol
 
 

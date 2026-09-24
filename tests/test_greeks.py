@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from mcfin import BlackScholes, DigitalOption, EuropeanOption, MonteCarloEngine
 from mcfin.analytics import bs_digital_price, bs_greeks

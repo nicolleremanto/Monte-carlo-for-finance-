@@ -3,7 +3,7 @@ import pytest
 from conftest import assert_mc
 
 from mcfin import (AsianOption, BarrierOption, BasketOption, BlackScholes, Cliquet, ControlVariate,
-                   EuropeanOption, Heston, LookbackOption, MonteCarloEngine, PhoenixAutocall,
+                   Heston, LookbackOption, MonteCarloEngine, PhoenixAutocall,
                    RainbowOption, VarianceSwap)
 from mcfin.analytics import barrier_price, bs_price, geometric_asian_price, lookback_floating_price
 from mcfin.analytics.exotics import bgk_shift

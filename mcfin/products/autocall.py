@@ -40,6 +40,7 @@ class PhoenixAutocall(Product):
     ki_monitoring: str = "european"      # "european" (à maturité) ou "daily"
     non_call_periods: int = 0
     notional: float = 1.0
+    initial_levels: float | np.ndarray | None = None   # niveaux de strike figés à l'émission
     _daily: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
@@ -55,12 +56,17 @@ class PhoenixAutocall(Product):
             return self.observation_dates
         return np.union1d(np.round(self.observation_dates, 12), np.round(self._daily, 12))
 
-    @staticmethod
-    def _perf(paths: Paths) -> np.ndarray:
+    def _perf(self, paths: Paths) -> np.ndarray:
+        """Performance worst-of. Les niveaux initiaux sont ceux fixés à
+        l'émission (``initial_levels``) ; par défaut le spot en t = 0 (pricing
+        à l'émission). Pour les Greeks d'un produit vivant, il faut figer les
+        niveaux : sinon un choc de spot est neutralisé par la normalisation."""
         s = paths.spot
+        ref = s[:, :1] if self.initial_levels is None else np.asarray(self.initial_levels, float)
         if s.ndim == 2:
-            return s / s[:, :1]
-        return (s / s[:, :1, :]).min(axis=2)
+            return s / ref
+        ref = s[:, :1, :] if self.initial_levels is None else ref[None, None, :]
+        return (s / ref).min(axis=2)
 
     def cashflows(self, paths: Paths):
         """Renvoie (valeur actualisée par trajectoire, proba de rappel par date,
