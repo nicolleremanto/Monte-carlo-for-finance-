@@ -9,6 +9,7 @@ en HW, discret en LMM) ; les régressions se font en valeur « t_k ».
 Contrôles de cohérence : prix bermudéen >= max des européennes
 co-terminales, et égal à l'européenne quand il n'y a qu'une date.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -19,7 +20,7 @@ from ..core.results import MCResult
 from .hull_white import HullWhite
 from .lmm import LiborMarketModel
 
-__all__ = ["lsm_backward", "bermudan_swaption_hw", "bermudan_swaption_lmm"]
+__all__ = ["bermudan_swaption_hw", "bermudan_swaption_lmm", "lsm_backward"]
 
 
 def _poly(x: np.ndarray, degree: int, h: np.ndarray) -> np.ndarray:
@@ -83,29 +84,48 @@ def _hw_data(hw: HullWhite, ex_times, pay_times, strike, payer, n_paths, seed):
     return feats, np.column_stack(H), np.column_stack(D)
 
 
-def bermudan_swaption_hw(hw: HullWhite, exercise_times, end: float, strike: float,
-                         payer: bool = True, freq: float = 1.0, n_paths: int = 50_000,
-                         degree: int = 3, seed: int = 0) -> MCResult:
+def bermudan_swaption_hw(
+    hw: HullWhite,
+    exercise_times,
+    end: float,
+    strike: float,
+    payer: bool = True,
+    freq: float = 1.0,
+    n_paths: int = 50_000,
+    degree: int = 3,
+    seed: int = 0,
+) -> MCResult:
     """Bermudéenne co-terminale sous Hull-White : exercice aux dates données,
     swap sous-jacent jusqu'à ``end`` avec paiements fixes tous les ``freq`` ans."""
     ex = np.asarray(exercise_times, dtype=float)
     pay = np.arange(ex[0] + freq, end + 1e-9, freq)
-    fit = _hw_data(hw, ex, pay, strike, payer, n_paths, seed)
-    _, coeffs = lsm_backward(*fit, degree=degree)
-    cf, _ = lsm_backward(*_hw_data(hw, ex, pay, strike, payer, n_paths, seed + 1),
-                         degree=degree, coeffs=coeffs)
+    feats, h_ex, dfl = _hw_data(hw, ex, pay, strike, payer, n_paths, seed)
+    _, coeffs = lsm_backward(feats, h_ex, dfl, degree=degree)
+    feats, h_ex, dfl = _hw_data(hw, ex, pay, strike, payer, n_paths, seed + 1)
+    cf, _ = lsm_backward(feats, h_ex, dfl, degree=degree, coeffs=coeffs)
     # erreur standard sur les moyennes de paires antithétiques
     h = cf.size // 2
     pairs = 0.5 * (cf[:h] + cf[h:])
     europeans = [hw.swaption(T, pay[pay > T + 1e-12], strike, payer) for T in ex]
-    return MCResult(float(cf.mean()), float(pairs.std(ddof=1) / np.sqrt(h)), cf.size,
-                    method="LSM Hull-White",
-                    extra={"max_european": max(europeans), "europeans": europeans})
+    return MCResult(
+        float(cf.mean()),
+        float(pairs.std(ddof=1) / np.sqrt(h)),
+        cf.size,
+        method="LSM Hull-White",
+        extra={"max_european": max(europeans), "europeans": europeans},
+    )
 
 
-def bermudan_swaption_lmm(lmm: LiborMarketModel, first_ex: int, end: int, strike: float,
-                          payer: bool = True, n_paths: int = 50_000, degree: int = 2,
-                          seed: int = 0) -> MCResult:
+def bermudan_swaption_lmm(
+    lmm: LiborMarketModel,
+    first_ex: int,
+    end: int,
+    strike: float,
+    payer: bool = True,
+    n_paths: int = 50_000,
+    degree: int = 2,
+    seed: int = 0,
+) -> MCResult:
     """Bermudéenne sous LMM : exercice en T_k, k = first_ex..end-1, swap co-terminal
     jusqu'à T_end. Variables de régression : taux swap et premier forward."""
     sign = 1.0 if payer else -1.0
@@ -120,9 +140,10 @@ def bermudan_swaption_lmm(lmm: LiborMarketModel, first_ex: int, end: int, strike
             feats.append(np.column_stack([S / strike, p.forwards[:, k, k] / strike]))
         return feats, np.column_stack(H), np.column_stack(D)
 
-    _, coeffs = lsm_backward(*data(seed), degree=degree)
-    cf, _ = lsm_backward(*data(seed + 1), degree=degree, coeffs=coeffs)
+    feats, h_ex, dfl = data(seed)
+    _, coeffs = lsm_backward(feats, h_ex, dfl, degree=degree)
+    feats, h_ex, dfl = data(seed + 1)
+    cf, _ = lsm_backward(feats, h_ex, dfl, degree=degree, coeffs=coeffs)
     h = cf.size // 2
     pairs = 0.5 * (cf[:h] + cf[h:])
-    return MCResult(float(cf.mean()), float(pairs.std(ddof=1) / np.sqrt(h)), cf.size,
-                    method="LSM LMM")
+    return MCResult(float(cf.mean()), float(pairs.std(ddof=1) / np.sqrt(h)), cf.size, method="LSM LMM")

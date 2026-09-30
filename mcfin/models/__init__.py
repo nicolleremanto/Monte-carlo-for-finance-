@@ -1,5 +1,6 @@
 """Modèles de diffusion simulables."""
+
 from .base import Model, bump_model
-from .equity import BlackScholes, MertonJumpDiffusion, Heston, SABR
-from .local_vol import LocalVol, LocalStochasticVol, LeverageFunction
+from .equity import SABR, BlackScholes, Heston, MertonJumpDiffusion
+from .local_vol import LeverageFunction, LocalStochasticVol, LocalVol
 from .rough import RoughBergomi

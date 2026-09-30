@@ -1,8 +1,10 @@
 """Interface commune des modèles de diffusion (actions / indices / change)."""
+
 from __future__ import annotations
 
 import dataclasses
 from abc import ABC, abstractmethod
+from typing import Any
 
 import numpy as np
 
@@ -26,6 +28,8 @@ class Model(ABC):
     n_assets : nombre de sous-jacents.
     uniform_grid : le schéma exige un pas constant (rough Bergomi).
     """
+
+    spot: float | np.ndarray  # déclaré par chaque sous-classe (dataclass)
     n_factors: int = 1
     n_assets: int = 1
     uniform_grid: bool = False
@@ -57,6 +61,8 @@ class Model(ABC):
     def build_grid(self, obs_times, max_dt: float | None = None) -> TimeGrid:
         dt = self.dt if max_dt is None else max_dt
         if self.uniform_grid:
+            if dt is None:
+                raise ValueError("un pas de temps est requis pour une grille uniforme")
             return TimeGrid.uniform(obs_times, dt)
         return TimeGrid.build(obs_times, dt)
 
@@ -75,6 +81,7 @@ def bump_model(model: Model, param: str, h: float, relative: bool = False) -> Mo
     (choc parallèle des taux zéro).
     """
     value = getattr(model, param)
+    new: Any
     if isinstance(value, Curve):
         new = value.shift(h)
     else:
@@ -82,4 +89,4 @@ def bump_model(model: Model, param: str, h: float, relative: bool = False) -> Mo
         new = arr * (1 + h) if relative else arr + h
         if np.ndim(value) == 0:
             new = float(new)
-    return dataclasses.replace(model, **{param: new})
+    return dataclasses.replace(model, **{param: new})  # type: ignore[type-var]

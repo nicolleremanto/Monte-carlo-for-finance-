@@ -7,6 +7,7 @@ est la réunion des dates d'observation et d'une subdivision régulière de
 chaque intervalle ; on ne conserve en mémoire que les valeurs aux dates
 d'observation.
 """
+
 from __future__ import annotations
 
 import warnings
@@ -21,8 +22,8 @@ _TOL = 1e-10
 
 @dataclass(frozen=True)
 class TimeGrid:
-    times: np.ndarray      # grille complète, times[0] = 0
-    obs_idx: np.ndarray    # indices des dates d'observation dans `times`
+    times: np.ndarray  # grille complète, times[0] = 0
+    obs_idx: np.ndarray  # indices des dates d'observation dans `times`
 
     @property
     def dt(self) -> np.ndarray:
@@ -44,7 +45,7 @@ class TimeGrid:
         return t
 
     @classmethod
-    def build(cls, obs_times, max_dt: float | None = None) -> "TimeGrid":
+    def build(cls, obs_times, max_dt: float | None = None) -> TimeGrid:
         """Réunion des dates d'observation et d'un raffinement de pas <= max_dt."""
         t_obs = cls._clean(obs_times)
         pts = [0.0]
@@ -60,7 +61,7 @@ class TimeGrid:
         return cls(times=times, obs_idx=np.asarray(obs_idx, dtype=int))
 
     @classmethod
-    def uniform(cls, obs_times, max_dt: float) -> "TimeGrid":
+    def uniform(cls, obs_times, max_dt: float) -> TimeGrid:
         """Grille uniforme (requise par le schéma hybride du rough Bergomi).
 
         Cherche le plus grand pas Δ <= max_dt tel que toutes les dates
@@ -76,7 +77,7 @@ class TimeGrid:
                 break
         else:
             n = n0
-            warnings.warn("dates d'observation projetées sur une grille uniforme")
+            warnings.warn("dates d'observation projetées sur une grille uniforme", stacklevel=2)
         times = horizon * np.arange(n + 1) / n
         obs_idx = np.round(t_obs / horizon * n).astype(int)
         if np.any(obs_idx == 0):

@@ -3,6 +3,7 @@
 Paramètres « stressés » (condition de Feller violée : 2κθ/ξ² < 1), où
 Euler est notoirement biaisé. Référence : formule semi-fermée (Lewis).
 """
+
 import dataclasses
 
 import matplotlib.pyplot as plt
@@ -19,8 +20,9 @@ ref = heston_price(100, 100, 2.0, 0.02, 0.0, model.params)[0]
 print(f"Feller 2κθ/ξ² = {model.params.feller:.2f} ; prix de référence = {ref:.4f}")
 steps = np.array([1, 2, 4, 8, 16, 32, 64])
 fig, ax = plt.subplots(figsize=(7, 4.2))
-for (scheme, label), color, mk in zip([("euler", "Euler full truncation"), ("qe", "QE-M (Andersen 2008)")],
-                                      SERIES, MARKERS):
+for (scheme, label), color, mk in zip(
+    [("euler", "Euler full truncation"), ("qe", "QE-M (Andersen 2008)")], SERIES, MARKERS, strict=False
+):
     errs, ses = [], []
     for n in steps:
         m = dataclasses.replace(model, scheme=scheme, dt=1.0 / n)
@@ -29,8 +31,15 @@ for (scheme, label), color, mk in zip([("euler", "Euler full truncation"), ("qe"
         ses.append(r.stderr)
         print(f"{label:<24} pas = 1/{n:<3} biais = {r.price - ref:+.4f} ± {r.stderr:.4f}")
     ax.errorbar(steps, errs, yerr=2 * np.array(ses), color=color, marker=mk, capsize=3, label=label)
-    ax.annotate(label, (steps[0], errs[0]), xytext=(10, 12 if scheme == "qe" else 0),
-                textcoords="offset points", color=INK2, fontsize=8, va="center")
+    ax.annotate(
+        label,
+        (steps[0], errs[0]),
+        xytext=(10, 12 if scheme == "qe" else 0),
+        textcoords="offset points",
+        color=INK2,
+        fontsize=8,
+        va="center",
+    )
 ax.axhline(0, color="#c3c2b7", lw=1)
 ax.set_xscale("log", base=2)
 ax.set_xlabel("Nombre de pas par an")

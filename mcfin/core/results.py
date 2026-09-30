@@ -1,10 +1,12 @@
 """Résultats Monte Carlo et estimateurs statistiques."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.stats import norm, t as student_t
+from scipy.stats import norm
+from scipy.stats import t as student_t
 
 __all__ = ["MCResult", "Paths", "mean_and_stderr"]
 
@@ -19,6 +21,7 @@ class MCResult:
     répétitions indépendantes (QMC randomisé : R - 1) ; l'IC utilise alors le
     quantile de Student au lieu du quantile gaussien.
     """
+
     price: float
     stderr: float
     n_paths: int
@@ -38,9 +41,11 @@ class MCResult:
 
     def __repr__(self) -> str:
         lo, hi = self.ci()
-        return (f"MCResult(price={self.price:.6f}, stderr={self.stderr:.6f}, "
-                f"IC95=[{lo:.6f}, {hi:.6f}], n={self.n_paths}, "
-                f"{self.method}, {self.elapsed:.2f}s)")
+        return (
+            f"MCResult(price={self.price:.6f}, stderr={self.stderr:.6f}, "
+            f"IC95=[{lo:.6f}, {hi:.6f}], n={self.n_paths}, "
+            f"{self.method}, {self.elapsed:.2f}s)"
+        )
 
 
 @dataclass
@@ -58,6 +63,7 @@ class Paths:
         brownien des barrières et par les swaps de variance.
     variance : variance instantanée (modèles à volatilité stochastique).
     """
+
     times: np.ndarray
     spot: np.ndarray
     discount: np.ndarray

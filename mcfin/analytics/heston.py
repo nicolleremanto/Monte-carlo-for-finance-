@@ -19,6 +19,7 @@ Prix par la formule de Lewis (2000), intégrale unique à décroissance en
 La quadrature est de Gauss-Legendre par panneaux (vectorisée sur les
 strikes) : suffisamment rapide pour la calibration.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,8 +29,14 @@ from scipy.optimize import least_squares
 
 from .black_scholes import black_price, bs_greeks, implied_vol, option_sign
 
-__all__ = ["HestonParams", "heston_cf", "heston_price", "heston_implied_vol",
-           "calibrate_heston", "heston_expected_variance"]
+__all__ = [
+    "HestonParams",
+    "calibrate_heston",
+    "heston_cf",
+    "heston_expected_variance",
+    "heston_implied_vol",
+    "heston_price",
+]
 
 
 @dataclass(frozen=True)
@@ -58,14 +65,12 @@ def heston_cf(u, T: float, p: HestonParams):
     d = np.sqrt(beta * beta + p.xi**2 * (iu + u * u))
     g = (beta - d) / (beta + d)
     edt = np.exp(-d * T)
-    C = p.kappa * p.theta / p.xi**2 * ((beta - d) * T
-                                        - 2.0 * np.log((1.0 - g * edt) / (1.0 - g)))
+    C = p.kappa * p.theta / p.xi**2 * ((beta - d) * T - 2.0 * np.log((1.0 - g * edt) / (1.0 - g)))
     D = (beta - d) / p.xi**2 * (1.0 - edt) / (1.0 - g * edt)
     out = C + D * p.v0
     if p.lam > 0:
         kbar = np.exp(p.mu_j + 0.5 * p.sigma_j**2) - 1.0
-        out = out + p.lam * T * (np.exp(iu * p.mu_j - 0.5 * u * u * p.sigma_j**2) - 1.0
-                                 - iu * kbar)
+        out = out + p.lam * T * (np.exp(iu * p.mu_j - 0.5 * u * u * p.sigma_j**2) - 1.0 - iu * kbar)
     return np.exp(out)
 
 
@@ -122,9 +127,17 @@ def heston_expected_variance(T: float, p: HestonParams) -> float:
     return p.theta + (p.v0 - p.theta) * (1 - np.exp(-p.kappa * T)) / (p.kappa * T)
 
 
-def calibrate_heston(S0: float, r: float, q: float, maturities, strikes, market_vols,
-                     x0=(0.04, 1.5, 0.04, 0.5, -0.6), feller_penalty: float = 0.0,
-                     verbose: int = 0) -> tuple[HestonParams, dict]:
+def calibrate_heston(
+    S0: float,
+    r: float,
+    q: float,
+    maturities,
+    strikes,
+    market_vols,
+    x0=(0.04, 1.5, 0.04, 0.5, -0.6),
+    feller_penalty: float = 0.0,
+    verbose: int = 0,
+) -> tuple[HestonParams, dict]:
     """Calibration de Heston à une nappe de volatilités implicites.
 
     Minimise Σ ((P_model - P_mkt)/Vega_mkt)² ≈ Σ (σ_model - σ_mkt)² (erreurs en
@@ -150,24 +163,36 @@ def calibrate_heston(S0: float, r: float, q: float, maturities, strikes, market_
         for t in uniq:
             m = T == t
             c = heston_price(S0, K[m], t, r, q, p, "call")
-            out[m] = np.where(otype[m] > 0, c,
-                              c - S0 * np.exp(-q * t) + K[m] * np.exp(-r * t))
+            out[m] = np.where(otype[m] > 0, c, c - S0 * np.exp(-q * t) + K[m] * np.exp(-r * t))
         return out
 
     def residuals(x):
         res = (model_prices(x) - mkt) / vega
         if feller_penalty > 0:
-            v0, kappa, theta, xi, rho = x
+            _, kappa, theta, xi, _ = x
             res = np.append(res, feller_penalty * max(0.0, xi**2 - 2 * kappa * theta))
         return res
 
     lb = [1e-4, 1e-2, 1e-4, 1e-2, -0.999]
     ub = [1.0, 20.0, 1.0, 5.0, 0.999]
-    sol = least_squares(residuals, x0=np.asarray(x0, dtype=float), bounds=(lb, ub),
-                        method="trf", x_scale="jac", verbose=verbose,
-                        ftol=1e-12, xtol=1e-12, gtol=1e-12, max_nfev=2000)
+    sol = least_squares(
+        residuals,
+        x0=np.asarray(x0, dtype=float),
+        bounds=(lb, ub),
+        method="trf",
+        x_scale="jac",
+        verbose=verbose,
+        ftol=1e-12,
+        xtol=1e-12,
+        gtol=1e-12,
+        max_nfev=2000,
+    )
     params = HestonParams(*sol.x)
     fitted = implied_vol(model_prices(sol.x), S0, K, T, r, q, otype)
-    info = {"rmse_vol": float(np.sqrt(np.mean((fitted - vol) ** 2))),
-            "model_vols": fitted, "success": sol.success, "nfev": sol.nfev}
+    info = {
+        "rmse_vol": float(np.sqrt(np.mean((fitted - vol) ** 2))),
+        "model_vols": fitted,
+        "success": sol.success,
+        "nfev": sol.nfev,
+    }
     return params, info

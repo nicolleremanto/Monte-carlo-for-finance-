@@ -11,6 +11,7 @@ approximation (asymptotiquement optimale) de la densité d'échantillonnage
 options très en dehors de la monnaie, digitales lointaines, queue de
 distribution pour la VaR.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -21,8 +22,7 @@ from ..models.base import Model
 __all__ = ["optimal_drift"]
 
 
-def optimal_drift(model: Model, product, max_dt: float | None = None,
-                  eps: float = 1e-300) -> np.ndarray:
+def optimal_drift(model: Model, product, max_dt: float | None = None, eps: float = 1e-300) -> np.ndarray:
     """Dérive μ* (n_steps, n_factors) maximisant ln G(z) - |z|²/2.
 
     G(z) est le flux actualisé d'une trajectoire unique simulée à partir de z
@@ -35,7 +35,7 @@ def optimal_drift(model: Model, product, max_dt: float | None = None,
     dim = shape[0] * shape[1]
 
     def g(zflat):
-        paths = model.simulate(grid, zflat.reshape((1,) + shape))
+        paths = model.simulate(grid, zflat.reshape((1, *shape)))
         return float(product.payoff(paths)[0])
 
     def objective(zflat):

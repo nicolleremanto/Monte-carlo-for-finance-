@@ -35,6 +35,7 @@ les estimateurs de range sont biaisés vers le bas, d'autant plus que m est
 petit. Le test ``test_range_estimators_efficiency_and_discretisation_bias``
 le vérifie.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -42,7 +43,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.stats import norm
 
-__all__ = ["GBMFit", "fit_gbm_mle", "simulate_ohlc", "range_volatility"]
+__all__ = ["GBMFit", "fit_gbm_mle", "range_volatility", "simulate_ohlc"]
 
 
 @dataclass
@@ -56,8 +57,10 @@ class GBMFit:
 
     def ci(self, level: float = 0.95) -> dict:
         z = norm.ppf(0.5 + level / 2)
-        return {"mu": (self.mu - z * self.se_mu, self.mu + z * self.se_mu),
-                "sigma": (self.sigma - z * self.se_sigma, self.sigma + z * self.se_sigma)}
+        return {
+            "mu": (self.mu - z * self.se_mu, self.mu + z * self.se_mu),
+            "sigma": (self.sigma - z * self.se_sigma, self.sigma + z * self.se_sigma),
+        }
 
 
 def fit_gbm_mle(prices: np.ndarray, dt: float) -> GBMFit:
@@ -74,8 +77,15 @@ def fit_gbm_mle(prices: np.ndarray, dt: float) -> GBMFit:
     return GBMFit(mu, sigma, float(np.sqrt(var_mu)), sigma / np.sqrt(2 * n), n, ll)
 
 
-def simulate_ohlc(S0: float, mu: float, sigma: float, n_days: int, steps_per_day: int = 390,
-                  dt_day: float = 1 / 252, seed: int | None = 0) -> dict:
+def simulate_ohlc(
+    S0: float,
+    mu: float,
+    sigma: float,
+    n_days: int,
+    steps_per_day: int = 390,
+    dt_day: float = 1 / 252,
+    seed: int | None = 0,
+) -> dict:
     """Séances OHLC d'un GBM (plus haut/bas relevés sur une grille intra-journalière)."""
     rng = np.random.default_rng(seed)
     h = dt_day / steps_per_day
@@ -87,8 +97,10 @@ def simulate_ohlc(S0: float, mu: float, sigma: float, n_days: int, steps_per_day
     path = opens[:, None] + intraday
     high = np.maximum(path.max(axis=1), opens)
     low = np.minimum(path.min(axis=1), opens)
-    return {k: S0 * np.exp(v) for k, v in
-            {"open": opens, "high": high, "low": low, "close": day_close[1:]}.items()}
+    return {
+        k: S0 * np.exp(v)
+        for k, v in {"open": opens, "high": high, "low": low, "close": day_close[1:]}.items()
+    }
 
 
 def range_volatility(ohlc: dict, dt: float = 1 / 252, method: str = "garman_klass") -> float:

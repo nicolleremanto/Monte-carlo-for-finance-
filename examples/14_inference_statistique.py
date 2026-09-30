@@ -5,6 +5,7 @@ fixé (5 ans) : σ s'estime d'autant mieux qu'on observe souvent, μ jamais
 mieux que σ/sqrt(T). Puis efficacité des estimateurs de volatilité par
 l'amplitude (Parkinson, Garman-Klass, Rogers-Satchell).
 """
+
 import matplotlib.pyplot as plt
 import numpy as np
 from _style import INK2, MARKERS, SERIES, save, setup
@@ -23,16 +24,24 @@ for name, f in freqs.items():
     fit = fit_gbm_mle(100 * np.exp(np.concatenate([[0.0], np.cumsum(r)])), 1 / f)
     half_mu.append(1.96 * fit.se_mu)
     half_sig.append(1.96 * fit.se_sigma)
-    print(f"  {name:<13} n = {n:>6}  μ̂ = {fit.mu:+.3f} ± {half_mu[-1]:.3f}   "
-          f"σ̂ = {fit.sigma:.4f} ± {half_sig[-1]:.4f}")
+    print(
+        f"  {name:<13} n = {n:>6}  μ̂ = {fit.mu:+.3f} ± {half_mu[-1]:.3f}   "
+        f"σ̂ = {fit.sigma:.4f} ± {half_sig[-1]:.4f}"
+    )
 x = np.array(list(freqs.values())) * years
 fig, ax = plt.subplots(figsize=(7, 4.2))
 ax.loglog(x, np.array(half_mu) * 100, color=SERIES[0], marker=MARKERS[0], label="tendance μ")
 ax.loglog(x, np.array(half_sig) * 100, color=SERIES[1], marker=MARKERS[1], label="volatilité σ")
-for xi, lab in zip(x, freqs):
-    ax.annotate(lab, (xi, half_sig[list(freqs).index(lab)] * 100), xytext=(0, -14),
-                textcoords="offset points", ha="right" if lab == "horaire" else "center",
-                fontsize=8, color=INK2)
+for xi, lab in zip(x, freqs, strict=True):
+    ax.annotate(
+        lab,
+        (xi, half_sig[list(freqs).index(lab)] * 100),
+        xytext=(0, -14),
+        textcoords="offset points",
+        ha="right" if lab == "horaire" else "center",
+        fontsize=8,
+        color=INK2,
+    )
 ax.set_xlabel("Nombre d'observations sur 5 ans")
 ax.set_ylabel("Demi-largeur de l'IC à 95 % (points de %)")
 ax.set_title("Échantillonner plus souvent : σ se précise, μ jamais")
@@ -48,5 +57,4 @@ for s in range(300):
 base = np.var(np.square(est["close_to_close"]))
 for m, v in est.items():
     v = np.asarray(v)
-    print(f"  {m:<16} moyenne {v.mean():.4f}  écart-type {v.std():.4f}  "
-          f"efficacité {base / np.var(v**2):.1f}")
+    print(f"  {m:<16} moyenne {v.mean():.4f}  écart-type {v.std():.4f}  efficacité {base / np.var(v**2):.1f}")

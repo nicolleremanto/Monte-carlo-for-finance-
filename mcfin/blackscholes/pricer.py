@@ -13,6 +13,7 @@ différents :
 * **arbre** : marche aléatoire binomiale convergeant vers le brownien
   (Donsker), probabilité risque-neutre discrète.
 """
+
 from __future__ import annotations
 
 import time
@@ -49,42 +50,50 @@ class BlackScholesPricer:
 
     # --- formule fermée ------------------------------------------------------
     def price(self) -> float:
-        return float(bs_price(self.S0, self.K, self.T, self.r, self.sigma, self.q,
-                              self.option_type))
+        return float(bs_price(self.S0, self.K, self.T, self.r, self.sigma, self.q, self.option_type))
 
     def greeks(self) -> dict[str, float]:
         g = bs_greeks(self.S0, self.K, self.T, self.r, self.sigma, self.q, self.option_type)
         return {k: float(v) for k, v in g.items()}
 
     def implied_vol(self, market_price: float) -> float:
-        return float(implied_vol(market_price, self.S0, self.K, self.T, self.r, self.q,
-                                 self.option_type))
+        return float(implied_vol(market_price, self.S0, self.K, self.T, self.r, self.q, self.option_type))
 
     # --- Monte Carlo -----------------------------------------------------------
     def model(self) -> BlackScholes:
         return BlackScholes(spot=self.S0, vol=self.sigma, rate=self.r, div=self.q)
 
-    def monte_carlo(self, n_paths: int = 100_000, seed: int | None = 0,
-                    method: str = "pseudo", antithetic: bool = False,
-                    control_variate: bool = False) -> MCResult:
+    def monte_carlo(
+        self,
+        n_paths: int = 100_000,
+        seed: int | None = 0,
+        method: str = "pseudo",
+        antithetic: bool = False,
+        control_variate: bool = False,
+    ) -> MCResult:
         """Simulation exacte de S_T (un seul pas). Variable de contrôle
         optionnelle : le sous-jacent actualisé, E[e^{-rT} S_T] = S0 e^{-qT}."""
         eng = MonteCarloEngine(n_paths, seed=seed, method=method, antithetic=antithetic)
         product = EuropeanOption(self.K, self.T, self.option_type)
-        cvs = ()
+        cvs: tuple[ControlVariate, ...] = ()
         if control_variate:
-            cvs = (ControlVariate(lambda p: p.spot[:, -1] * p.df(-1),
-                                  self.S0 * np.exp(-self.q * self.T), "forward"),)
+            cvs = (
+                ControlVariate(
+                    lambda p: p.spot[:, -1] * p.df(-1), self.S0 * np.exp(-self.q * self.T), "forward"
+                ),
+            )
         return eng.price(self.model(), product, cvs)
 
     # --- EDP et arbre ----------------------------------------------------------------
     def pde(self, american: bool = False, n_space: int = 400, n_time: int = 200) -> PDEResult:
-        return bs_pde_price(self.S0, self.K, self.T, self.r, self.sigma, self.q,
-                            self.option_type, american, n_space, n_time)
+        return bs_pde_price(
+            self.S0, self.K, self.T, self.r, self.sigma, self.q, self.option_type, american, n_space, n_time
+        )
 
     def tree(self, american: bool = False, n_steps: int = 1001) -> float:
-        return leisen_reimer_price(self.S0, self.K, self.T, self.r, self.sigma, self.q,
-                                   self.option_type, american, n_steps)
+        return leisen_reimer_price(
+            self.S0, self.K, self.T, self.r, self.sigma, self.q, self.option_type, american, n_steps
+        )
 
     # --- synthèse ----------------------------------------------------------------------
     def compare(self, n_paths: int = 200_000) -> list[dict]:
@@ -98,15 +107,15 @@ class BlackScholesPricer:
             dt = time.perf_counter() - t0
             price = out.price if hasattr(out, "price") else float(out)
             se = getattr(out, "stderr", None)
-            rows.append({"méthode": name, "prix": price, "écart": price - ref,
-                         "err_std": se, "temps_s": dt})
+            rows.append({"méthode": name, "prix": price, "écart": price - ref, "err_std": se, "temps_s": dt})
 
         add("Formule fermée", self.price)
         add("MC pseudo-aléatoire", lambda: self.monte_carlo(n_paths))
-        add("MC antithétique + contrôle", lambda: self.monte_carlo(n_paths, antithetic=True,
-                                                                   control_variate=True))
-        add("QMC Sobol (RQMC)", lambda: self.monte_carlo(2 ** int(np.log2(n_paths)),
-                                                         method="sobol"))
+        add(
+            "MC antithétique + contrôle",
+            lambda: self.monte_carlo(n_paths, antithetic=True, control_variate=True),
+        )
+        add("QMC Sobol (RQMC)", lambda: self.monte_carlo(2 ** int(np.log2(n_paths)), method="sobol"))
         add("EDP Crank-Nicolson", lambda: self.pde())
         add("Arbre Leisen-Reimer", lambda: self.tree())
         return rows

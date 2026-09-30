@@ -8,7 +8,8 @@ from mcfin.greeks import aad, gbm_path_pricer, heston_pricer, likelihood_ratio_g
 def test_bump_and_revalue_with_crn():
     m = BlackScholes(spot=100, vol=0.2, rate=0.03, div=0.01)
     g = MonteCarloEngine(n_paths=200_000, seed=1, antithetic=True).greeks(
-        m, EuropeanOption(100, 1.0), {"vol": 0.01, "rate": 1e-3})
+        m, EuropeanOption(100, 1.0), {"vol": 0.01, "rate": 1e-3}
+    )
     ref = bs_greeks(100, 100, 1.0, 0.03, 0.2, 0.01)
     assert abs(g["delta"] - ref["delta"]) < 5e-3
     assert abs(g["gamma"] - ref["gamma"]) < 2e-3
@@ -32,8 +33,9 @@ def test_aad_tape_elementary():
     gx, gy = tape.gradient(f, [x, y])
     xv, yv = 1.5, np.array([0.5, 2.0])
     dfdx = np.mean(yv * np.exp(xv * yv) / (1 + yv) + np.sqrt(yv) * 2 * xv)
-    dfdy = (xv * np.exp(xv * yv) / (1 + yv) - np.exp(xv * yv) / (1 + yv) ** 2
-            + 0.5 * xv**2 / np.sqrt(yv) - 1 / yv) / 2
+    dfdy = (
+        xv * np.exp(xv * yv) / (1 + yv) - np.exp(xv * yv) / (1 + yv) ** 2 + 0.5 * xv**2 / np.sqrt(yv) - 1 / yv
+    ) / 2
     assert np.isclose(gx, dfdx) and np.allclose(gy, dfdy)
 
 
@@ -47,6 +49,7 @@ def test_aad_heston_equals_finite_difference_limit():
     def value(p):
         tape = aad.Tape()
         return float(pricer({k: tape.variable(v) for k, v in p.items()}, z).value)
+
     for k, h in (("spot", 1e-4), ("v0", 1e-7), ("theta", 1e-7), ("rho", 1e-6)):
         up, dn = dict(params), dict(params)
         up[k] += h
@@ -59,9 +62,13 @@ def test_lrm_digital():
     m = BlackScholes(spot=100, vol=0.2, rate=0.03, div=0.01)
     g = likelihood_ratio_greeks(m, DigitalOption(105, 1.0), 400_000, seed=3)
     h = 1e-4
-    ref_delta = (bs_digital_price(100 + h, 105, 1, 0.03, 0.2, 0.01)
-                 - bs_digital_price(100 - h, 105, 1, 0.03, 0.2, 0.01)) / (2 * h)
-    ref_vega = (bs_digital_price(100, 105, 1, 0.03, 0.2 + h, 0.01)
-                - bs_digital_price(100, 105, 1, 0.03, 0.2 - h, 0.01)) / (2 * h)
+    ref_delta = (
+        bs_digital_price(100 + h, 105, 1, 0.03, 0.2, 0.01)
+        - bs_digital_price(100 - h, 105, 1, 0.03, 0.2, 0.01)
+    ) / (2 * h)
+    ref_vega = (
+        bs_digital_price(100, 105, 1, 0.03, 0.2 + h, 0.01)
+        - bs_digital_price(100, 105, 1, 0.03, 0.2 - h, 0.01)
+    ) / (2 * h)
     assert abs(g["delta"] - ref_delta) < 4 * g["delta_stderr"]
     assert abs(g["vega"] - ref_vega) < 4 * g["vega_stderr"]

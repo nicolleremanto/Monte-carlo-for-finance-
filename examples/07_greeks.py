@@ -4,11 +4,13 @@
 2. Digitale : le pathwise/AAD échoue (dérivée nulle p.s.), le LRM fonctionne.
 3. Heston : 7 sensibilités en UNE passe adjointe vs 14 revalorisations.
 """
+
 import time
 
 import numpy as np
 
 import mcfin as mc
+from mcfin.analytics import bs_digital_price
 from mcfin.greeks import aad, gbm_path_pricer, heston_pricer, likelihood_ratio_greeks
 
 fix = np.arange(1, 13) / 12
@@ -30,10 +32,14 @@ t_aad = time.perf_counter() - t
 print("Asiatique arithmétique (12 fixings)")
 print(f"{'':<10}{'delta':>10}{'vega':>10}{'temps (s)':>12}")
 print(f"{'Bump CRN':<10}{bump['delta']:>10.4f}{bump['vol']:>10.3f}{t_bump:>12.2f}")
-print(f"{'LRM':<10}{lrm['delta']:>10.4f}{lrm['vega']:>10.3f}{t_lrm:>12.2f}   "
-      f"(err. std : {lrm['delta_stderr']:.4f} / {lrm['vega_stderr']:.3f})")
-print(f"{'AAD':<10}{ad['spot']:>10.4f}{ad['vol']:>10.3f}{t_aad:>12.2f}   "
-      f"(err. std : {ad['spot_stderr']:.4f} / {ad['vol_stderr']:.3f})")
+print(
+    f"{'LRM':<10}{lrm['delta']:>10.4f}{lrm['vega']:>10.3f}{t_lrm:>12.2f}   "
+    f"(err. std : {lrm['delta_stderr']:.4f} / {lrm['vega_stderr']:.3f})"
+)
+print(
+    f"{'AAD':<10}{ad['spot']:>10.4f}{ad['vol']:>10.3f}{t_aad:>12.2f}   "
+    f"(err. std : {ad['spot_stderr']:.4f} / {ad['vol_stderr']:.3f})"
+)
 
 dig_pricer = gbm_path_pricer(lambda s, xp: (s[-1].value > 105) * 1.0 + 0.0 * s[-1], [1.0], 1.0)
 dig_smooth = gbm_path_pricer(lambda s, xp: xp.smooth_step(s[-1] - 105.0, 0.5), [1.0], 1.0)
@@ -44,9 +50,9 @@ print("\nDigitale K=105 : delta")
 print(f"  AAD brut      : {aad.aad_greeks(dig_pricer, p, z1)['spot']:.5f}   (faux : dérivée nulle p.s.)")
 print(f"  AAD lissé     : {aad.aad_greeks(dig_smooth, p, z1)['spot']:.5f}   (sigmoïde, biais O(ε²))")
 print(f"  LRM           : {lrm_d['delta']:.5f} ± {lrm_d['delta_stderr']:.5f}")
-from mcfin.analytics import bs_digital_price
 h = 1e-4
-print(f"  exact         : {(bs_digital_price(100 + h, 105, 1, .03, .25) - bs_digital_price(100 - h, 105, 1, .03, .25)) / (2 * h):.5f}")
+up, dn = bs_digital_price(100 + h, 105, 1, 0.03, 0.25), bs_digital_price(100 - h, 105, 1, 0.03, 0.25)
+print(f"  exact         : {(up - dn) / (2 * h):.5f}")
 
 hp = heston_pricer(100.0, 1.0, 50)
 params = dict(spot=100.0, v0=0.04, kappa=2.0, theta=0.04, xi=0.3, rho=-0.7, rate=0.02)

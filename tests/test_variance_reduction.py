@@ -2,7 +2,7 @@ import numpy as np
 from conftest import assert_mc
 
 from mcfin import AsianOption, BlackScholes, EuropeanOption, MonteCarloEngine
-from mcfin.analytics import bs_price, heston_price, HestonParams
+from mcfin.analytics import HestonParams, bs_price, heston_price
 from mcfin.variance_reduction import gbm_level_sampler, heston_level_sampler, mlmc, optimal_drift
 
 
@@ -30,8 +30,8 @@ def test_mlmc_gbm_milstein():
     res = mlmc(gbm_level_sampler(100, 100, 1, 0.05, 0.2, scheme="milstein"), eps=0.01, seed=1)
     assert abs(res.price - bs_price(100, 100, 1, 0.05, 0.2)) < 0.03
     v = np.array(res.variances[1:])
-    assert np.all(v[1:] < v[:-1])          # V_l décroissante (β ≈ 2 pour Milstein)
-    assert res.std_mc_cost > res.cost      # plus efficace qu'un MC standard
+    assert np.all(v[1:] < v[:-1])  # V_l décroissante (β ≈ 2 pour Milstein)
+    assert res.std_mc_cost > res.cost  # plus efficace qu'un MC standard
 
 
 def test_mlmc_heston():

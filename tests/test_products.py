@@ -2,9 +2,20 @@ import numpy as np
 import pytest
 from conftest import assert_mc
 
-from mcfin import (AsianOption, BarrierOption, BasketOption, BlackScholes, Cliquet, ControlVariate,
-                   Heston, LookbackOption, MonteCarloEngine, PhoenixAutocall,
-                   RainbowOption, VarianceSwap)
+from mcfin import (
+    AsianOption,
+    BarrierOption,
+    BasketOption,
+    BlackScholes,
+    Cliquet,
+    ControlVariate,
+    Heston,
+    LookbackOption,
+    MonteCarloEngine,
+    PhoenixAutocall,
+    RainbowOption,
+    VarianceSwap,
+)
 from mcfin.analytics import barrier_price, bs_price, geometric_asian_price, lookback_floating_price
 from mcfin.analytics.exotics import bgk_shift
 from mcfin.analytics.heston import heston_expected_variance
@@ -12,11 +23,16 @@ from mcfin.analytics.heston import heston_expected_variance
 BS = BlackScholes(spot=100, vol=0.25, rate=0.05, div=0.02)
 
 
-@pytest.mark.parametrize("bt,K,H,ot", [
-    ("down-and-out", 100, 90, "call"), ("down-and-in", 100, 90, "call"),
-    ("up-and-out", 100, 120, "call"), ("up-and-in", 95, 110, "put"),
-    ("down-and-out", 110, 85, "put"),
-])
+@pytest.mark.parametrize(
+    "bt,K,H,ot",
+    [
+        ("down-and-out", 100, 90, "call"),
+        ("down-and-in", 100, 90, "call"),
+        ("up-and-out", 100, 120, "call"),
+        ("up-and-in", 95, 110, "put"),
+        ("down-and-out", 110, 85, "put"),
+    ],
+)
 def test_barrier_brownian_bridge_correction(bt, K, H, ot):
     eng = MonteCarloEngine(n_paths=100_000, antithetic=True, seed=1)
     cont = eng.price(BS, BarrierOption(K, H, 1.0, ot, bt, n_monitoring=25, monitoring="continuous"))
@@ -30,7 +46,8 @@ def test_barrier_brownian_bridge_correction(bt, K, H, ot):
 @pytest.mark.parametrize("ot", ["call", "put"])
 def test_lookback_with_bgk(ot):
     res = MonteCarloEngine(n_paths=100_000, antithetic=True, seed=2).price(
-        BS, LookbackOption(1.0, ot, 252, bgk_sigma=0.25))
+        BS, LookbackOption(1.0, ot, 252, bgk_sigma=0.25)
+    )
     assert_mc(res, lookback_floating_price(100, 1.0, 0.05, 0.25, 0.02, ot), abs_tol=0.03)
 
 
@@ -56,8 +73,9 @@ def test_variance_swap_heston():
 
 
 def test_basket_and_rainbow_degenerate_cases():
-    m = BlackScholes(spot=np.array([100.0, 100.0]), vol=0.2, rate=0.03,
-                     corr=np.array([[1, 0.999999], [0.999999, 1]]))
+    m = BlackScholes(
+        spot=np.array([100.0, 100.0]), vol=0.2, rate=0.03, corr=np.array([[1, 0.999999], [0.999999, 1]])
+    )
     eng = MonteCarloEngine(n_paths=100_000, seed=5)
     ref = bs_price(100, 100, 1.0, 0.03, 0.2) / 100
     assert_mc(eng.price(m, BasketOption(1.0, 1.0, np.array([0.5, 0.5]))), ref, abs_tol=1e-4)
@@ -72,9 +90,14 @@ def test_cliquet_bounds():
 
 
 def test_autocall_properties():
-    corr = np.array([[1, .6, .5], [.6, 1, .55], [.5, .55, 1]])
-    m = BlackScholes(spot=np.full(3, 100.0), vol=np.array([0.25, 0.3, 0.2]), rate=0.03,
-                     div=np.array([0.02, 0.01, 0.03]), corr=corr)
+    corr = np.array([[1, 0.6, 0.5], [0.6, 1, 0.55], [0.5, 0.55, 1]])
+    m = BlackScholes(
+        spot=np.full(3, 100.0),
+        vol=np.array([0.25, 0.3, 0.2]),
+        rate=0.03,
+        div=np.array([0.02, 0.01, 0.03]),
+        corr=corr,
+    )
     dates = np.arange(1, 21) / 4
     eng = MonteCarloEngine(n_paths=50_000, seed=7)
     base = eng.price(m, PhoenixAutocall(dates, coupon=0.02))
@@ -86,6 +109,7 @@ def test_autocall_properties():
     assert np.isclose(an["redemption_prob_by_date"].sum(), 1.0)
     assert 0.25 <= an["expected_life"] <= 5.0
     # KI quotidien (américain) plus probable => prix plus bas
-    daily = MonteCarloEngine(n_paths=10_000, seed=7).price(m, PhoenixAutocall(dates, coupon=0.02,
-                                                                             ki_monitoring="daily"))
+    daily = MonteCarloEngine(n_paths=10_000, seed=7).price(
+        m, PhoenixAutocall(dates, coupon=0.02, ki_monitoring="daily")
+    )
     assert daily.price < base.price

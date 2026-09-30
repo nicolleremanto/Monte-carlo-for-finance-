@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcfin"
-version = "1.0.0"
-description = "Monte Carlo pour la salle des marchés : pricing exotique, Greeks (AAD), XVA, VaR"
+version = "1.1.0"
+description = "Monte Carlo pour la salle des marchés : pricing exotique, Black-Scholes de A à Z, Greeks (AAD), XVA, VaR"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,12 +13,52 @@ dependencies = ["numpy>=1.24", "scipy>=1.10"]
 
 [project.optional-dependencies]
 plot = ["matplotlib>=3.7"]
-dev = ["pytest>=7", "matplotlib>=3.7"]
+dev = ["pytest>=7", "pytest-cov>=4", "hypothesis>=6", "matplotlib>=3.7", "ruff>=0.6", "mypy>=1.8"]
 
 [tool.setuptools.packages.find]
 include = ["mcfin*"]
+
+[tool.setuptools.package-data]
+mcfin = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 markers = ["slow: tests longs (LSV, Andersen-Broadie)"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "SIM", "RUF"]
+ignore = [
+    "E731",    # lambdas nommées : style mathématique assumé dans les exemples
+    "RUF001", "RUF002", "RUF003",  # caractères grecs/typographie française (σ, é, «»)
+    "B023",    # fermetures dans les boucles : liaisons explicites vérifiées
+    "SIM108",
+    "SIM300",  # comparaisons « yoda » : faux positifs sur les variables en majuscule (L, K, T)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"examples/*" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mcfin"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[tool.coverage.run]
+source = ["mcfin"]
+branch = true
+
+[tool.coverage.report]
+show_missing = false
+skip_covered = true

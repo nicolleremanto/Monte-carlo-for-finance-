@@ -17,6 +17,7 @@ coupon/rappel : elle est longue corrélation et longue volatilité en bas du
 smile (d'où l'importance du modèle de smile : LV/LSV plutôt que BS), et
 porte un fort gamma digital près des barrières.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,7 +25,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..core.results import Paths
-from .base import Product, time_index
+from .base import Product, time_index, time_indices
 
 __all__ = ["PhoenixAutocall"]
 
@@ -37,17 +38,17 @@ class PhoenixAutocall(Product):
     coupon: float | np.ndarray = 0.02
     protection_barrier: float = 0.6
     memory: bool = True
-    ki_monitoring: str = "european"      # "european" (à maturité) ou "daily"
+    ki_monitoring: str = "european"  # "european" (à maturité) ou "daily"
     non_call_periods: int = 0
     notional: float = 1.0
-    initial_levels: float | np.ndarray | None = None   # niveaux de strike figés à l'émission
+    initial_levels: float | np.ndarray | None = None  # niveaux de strike figés à l'émission
     _daily: np.ndarray = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         self.observation_dates = np.asarray(self.observation_dates, dtype=float)
         if self.ki_monitoring == "daily":
             T = self.observation_dates[-1]
-            n = int(round(252 * T))
+            n = int(np.rint(252 * T))
             self._daily = T * np.arange(1, n + 1) / n
 
     @property
@@ -72,7 +73,7 @@ class PhoenixAutocall(Product):
         """Renvoie (valeur actualisée par trajectoire, proba de rappel par date,
         indicatrice de perte en capital)."""
         perf = self._perf(paths)
-        idx = time_index(paths, self.observation_dates)
+        idx = time_indices(paths, self.observation_dates)
         n_obs = idx.size
         ac = np.broadcast_to(np.asarray(self.autocall_barrier, float), (n_obs,))
         cb = np.broadcast_to(np.asarray(self.coupon_barrier, float), (n_obs,))
@@ -96,7 +97,7 @@ class PhoenixAutocall(Product):
                 alive &= ~called
         p_T = perf[:, idx[-1]]
         if self.ki_monitoring == "daily":
-            knocked = perf[:, 1: idx[-1] + 1].min(axis=1) < self.protection_barrier
+            knocked = perf[:, 1 : idx[-1] + 1].min(axis=1) < self.protection_barrier
         else:
             knocked = p_T < self.protection_barrier
         redemption = np.where(knocked, self.notional * np.minimum(p_T, 1.0), self.notional)

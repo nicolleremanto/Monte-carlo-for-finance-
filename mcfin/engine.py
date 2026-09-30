@@ -22,11 +22,12 @@ Pour Y (payoff) et X (contrôles d'espérance connue μ_X) :
     Ŷ_cv = Ȳ - β̂ᵀ (X̄ - μ_X),   β̂ = Cov(X)⁻¹ Cov(X, Y)   (MCO)
 La réduction de variance vaut 1 - R² de la régression de Y sur X.
 """
+
 from __future__ import annotations
 
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Sequence
 
 import numpy as np
 
@@ -34,7 +35,7 @@ from .core.results import MCResult, Paths
 from .core.rng import GaussianGenerator
 from .models.base import Model, bump_model
 
-__all__ = ["MonteCarloEngine", "ControlVariate"]
+__all__ = ["ControlVariate", "MonteCarloEngine"]
 
 
 def _concat_paths(parts: list[Paths]) -> Paths:
@@ -52,13 +53,20 @@ def _concat_paths(parts: list[Paths]) -> Paths:
         return np.concatenate(vals, axis=0)
 
     extra = {k: np.concatenate([p.extra[k] for p in parts], axis=0) for k in first.extra}
-    return Paths(times=first.times, spot=cat("spot"), discount=cat("discount"),
-                 int_var=cat("int_var"), variance=cat("variance"), extra=extra)
+    return Paths(
+        times=first.times,
+        spot=cat("spot"),
+        discount=cat("discount"),
+        int_var=cat("int_var"),
+        variance=cat("variance"),
+        extra=extra,
+    )
 
 
 @dataclass
 class ControlVariate:
     """Variable de contrôle : fonction des trajectoires d'espérance connue."""
+
     fn: Callable[[Paths], np.ndarray]
     expectation: float
     name: str = "cv"
@@ -77,12 +85,20 @@ class MonteCarloEngine:
     max_dt : pas de temps maximal (sinon celui du modèle).
     """
 
-    def __init__(self, n_paths: int = 100_000, seed: int | None = 42,
-                 method: str = "pseudo", antithetic: bool = False,
-                 moment_matching: bool = False, construction: str = "standard",
-                 n_randomizations: int = 16, batch_size: int = 50_000,
-                 max_dt: float | None = None, n_strata: int | None = None,
-                 max_batch_elements: int = 10_000_000):
+    def __init__(
+        self,
+        n_paths: int = 100_000,
+        seed: int | None = 42,
+        method: str = "pseudo",
+        antithetic: bool = False,
+        moment_matching: bool = False,
+        construction: str = "standard",
+        n_randomizations: int = 16,
+        batch_size: int = 50_000,
+        max_dt: float | None = None,
+        n_strata: int | None = None,
+        max_batch_elements: int = 10_000_000,
+    ):
         self.n_paths = int(n_paths)
         self.seed = seed
         self.method = method
@@ -102,8 +118,9 @@ class MonteCarloEngine:
     # ------------------------------------------------------------------
     def _generator(self, rep: int) -> GaussianGenerator:
         seed = None if self.seed is None else self.seed + 7919 * rep
-        return GaussianGenerator(self.method, seed, self.antithetic, self.moment_matching,
-                                 self.construction, self.n_strata)
+        return GaussianGenerator(
+            self.method, seed, self.antithetic, self.moment_matching, self.construction, self.n_strata
+        )
 
     def _batch_size(self, grid, n_factors: int) -> int:
         """Taille de lot bornant la mémoire des gaussiennes (~80 Mo par défaut)."""
@@ -123,8 +140,14 @@ class MonteCarloEngine:
             yield b
             n -= b
 
-    def simulate(self, model: Model, obs_times, n_paths: int | None = None,
-                 rep: int = 0, drift_shift: np.ndarray | None = None) -> Paths:
+    def simulate(
+        self,
+        model: Model,
+        obs_times,
+        n_paths: int | None = None,
+        rep: int = 0,
+        drift_shift: np.ndarray | None = None,
+    ) -> Paths:
         """Simule toutes les trajectoires d'un coup (pour LSM, XVA, analyses)."""
         n = n_paths or self.n_paths
         grid = model.build_grid(obs_times, self.max_dt)
@@ -138,8 +161,13 @@ class MonteCarloEngine:
         return _concat_paths(parts)
 
     # ------------------------------------------------------------------
-    def sample(self, model: Model, product, control_variates: Sequence[ControlVariate] = (),
-               drift_shift: np.ndarray | None = None):
+    def sample(
+        self,
+        model: Model,
+        product,
+        control_variates: Sequence[ControlVariate] = (),
+        drift_shift: np.ndarray | None = None,
+    ):
         """Renvoie la liste (par brouillage) des tableaux (payoffs, contrôles)."""
         grid = model.build_grid(product.observation_times, self.max_dt)
         n_rep = self.n_randomizations
@@ -161,8 +189,11 @@ class MonteCarloEngine:
                 y = np.asarray(product.payoff(paths), dtype=float)
                 if weight is not None:
                     y = y * weight
-                x = np.column_stack([cv.fn(paths) for cv in control_variates]) \
-                    if control_variates else np.empty((b, 0))
+                x = (
+                    np.column_stack([cv.fn(paths) for cv in control_variates])
+                    if control_variates
+                    else np.empty((b, 0))
+                )
                 if weight is not None and control_variates:
                     x = x * weight[:, None]
                 if self.antithetic:
@@ -174,9 +205,13 @@ class MonteCarloEngine:
             out.append((np.concatenate(ys), np.concatenate(xs)))
         return out
 
-    def price(self, model: Model, product,
-              control_variates: Sequence[ControlVariate] = (),
-              drift_shift: np.ndarray | None = None) -> MCResult:
+    def price(
+        self,
+        model: Model,
+        product,
+        control_variates: Sequence[ControlVariate] = (),
+        drift_shift: np.ndarray | None = None,
+    ) -> MCResult:
         t0 = time.perf_counter()
         samples = self.sample(model, product, control_variates, drift_shift)
         mu_x = np.array([cv.expectation for cv in control_variates])
@@ -204,22 +239,34 @@ class MonteCarloEngine:
             price = float(v.mean())
             if self.n_strata:
                 labels = np.arange(v.size) % self.n_strata
-                var = sum(np.var(v[labels == j], ddof=1) / np.sum(labels == j)
-                          for j in range(self.n_strata)) / self.n_strata**2
+                var = (
+                    sum(np.var(v[labels == j], ddof=1) / np.sum(labels == j) for j in range(self.n_strata))
+                    / self.n_strata**2
+                )
                 stderr = float(np.sqrt(var))
             else:
                 stderr = float(v.std(ddof=1) / np.sqrt(v.size))
-        desc = self.method + ("+anti" if self.antithetic else "") \
-            + ("+MM" if self.moment_matching else "") \
-            + (f"+{self.construction}" if self.construction != "standard" else "") \
-            + (f"+strat{self.n_strata}" if self.n_strata else "") \
-            + ("+CV" if control_variates else "") + ("+IS" if drift_shift is not None else "")
+        desc = (
+            self.method
+            + ("+anti" if self.antithetic else "")
+            + ("+MM" if self.moment_matching else "")
+            + (f"+{self.construction}" if self.construction != "standard" else "")
+            + (f"+strat{self.n_strata}" if self.n_strata else "")
+            + ("+CV" if control_variates else "")
+            + ("+IS" if drift_shift is not None else "")
+        )
         dof = self.n_randomizations - 1 if self.method == "sobol" else None
         return MCResult(price, stderr, self.n_paths, time.perf_counter() - t0, desc, extra, dof)
 
     # ------------------------------------------------------------------
-    def greeks(self, model: Model, product, params: dict[str, float] | None = None,
-               spot_bump: float = 0.01, second_order: bool = True) -> dict:
+    def greeks(
+        self,
+        model: Model,
+        product,
+        params: dict[str, float] | None = None,
+        spot_bump: float = 0.01,
+        second_order: bool = True,
+    ) -> dict:
         """Greeks par différences finies centrées avec nombres aléatoires communs.
 
         Avec la même graine, V(θ+h) - V(θ-h) a une variance O(1) au lieu de

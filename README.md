@@ -1,11 +1,17 @@
 # Monte Carlo pour la salle des marchés — `mcfin`
 
 [![tests](https://github.com/nicolleremanto/Monte-carlo-for-finance-/actions/workflows/tests.yml/badge.svg)](https://github.com/nicolleremanto/Monte-carlo-for-finance-/actions/workflows/tests.yml)
+![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
+![couverture](https://img.shields.io/badge/couverture%20de%20code-93%25-brightgreen)
+![lint](https://img.shields.io/badge/lint-ruff-261230)
+![typage](https://img.shields.io/badge/typage-mypy-2a6db2)
+![licence](https://img.shields.io/badge/licence-MIT-lightgrey)
 
 Librairie Python de **pricing et de gestion des risques par simulation**, couvrant les
 méthodes Monte Carlo utilisées sur les desks de dérivés actions, de taux et XVA.
 Chaque méthode est **validée contre une formule fermée ou un résultat publié** (suite de
-tests `pytest`), et la théorie est détaillée dans [`docs/THEORIE.md`](docs/THEORIE.md).
+tests `pytest`), et la théorie est détaillée dans [`docs/THEORIE.md`](docs/THEORIE.md)
+et [`docs/BLACK_SCHOLES.md`](docs/BLACK_SCHOLES.md).
 
 ## Contenu
 
@@ -19,6 +25,7 @@ tests `pytest`), et la théorie est détaillée dans [`docs/THEORIE.md`](docs/TH
 | **Réduction de variance** | Variables de contrôle (β par MCO), **échantillonnage préférentiel** (dérive GHS), **Multilevel Monte Carlo** (Giles) |
 | **Taux** | **Hull-White** simulé exactement, Jamshidian ; **LIBOR Market Model** (mesure spot, prédicteur-correcteur, vol abcd, ACP) ; **swaptions bermudéennes** |
 | **Risques** | **XVA** : profils EE/PFE, CVA/DVA/FVA, netting, **collatéral avec MPOR** ; **VaR/ES** (FRTB) en revalorisation complète vs delta-gamma, Student-t, bootstrap, contributions d'Euler |
+| **Black-Scholes de A à Z** | Façade `BlackScholesPricer` (formule fermée, MC, QMC, **EDP Crank-Nicolson**, arbre), 15 Greeks jusqu'à l'ordre 3, gaussiennes **from scratch** (inversion, Box-Muller, polaire, rejet), **américaines par Brennan-Schwartz** avec frontière d'exercice, **couverture delta discrète** (Kamal-Derman, P&L de gamma, Leland), **EMV** et estimateurs de range, **études de couverture des IC** |
 | **Formules fermées** | BS/Black/Bachelier + vol implicite robuste, Heston/Bates (Lewis) + calibration, barrières (Reiner-Rubinstein), BGK, asiatique géométrique, lookback, Merton, Hagan, arbre de Leisen-Reimer |
 
 ## Installation
@@ -26,8 +33,8 @@ tests `pytest`), et la théorie est détaillée dans [`docs/THEORIE.md`](docs/TH
 ```bash
 git clone https://github.com/nicolleremanto/Monte-carlo-for-finance-.git
 cd Monte-carlo-for-finance-
-pip install -e ".[dev]"      # numpy, scipy (+ pytest, matplotlib)
-pytest                       # ~1 min
+pip install -e ".[dev]"      # numpy, scipy (+ outils de développement)
+make check                   # lint + typage + tests + couverture (~2 min)
 ```
 
 ## Exemple rapide
@@ -55,6 +62,35 @@ print(mc.MonteCarloEngine(200_000).price(bs3, ac))
 print(mc.MonteCarloEngine(100_000).greeks(bs3, ac, {"vol": 0.01}))   # delta, gamma, vega (CRN)
 ```
 
+## Black-Scholes : une option, quatre méthodes
+
+```python
+from mcfin.blackscholes import BlackScholesPricer, coverage_study, simulate_delta_hedge
+
+opt = BlackScholesPricer(S0=100, K=105, T=1, r=0.03, sigma=0.25, q=0.01)
+opt.compare()        # formule fermée / MC / MC antithétique + contrôle / QMC / EDP / arbre
+opt.greeks()         # 15 sensibilités (delta ... ultima, dual gamma)
+opt.pde(american=True).exercise_boundary          # frontière d'exercice S*(τ)
+coverage_study(lambda s: opt.monte_carlo(4000, seed=s), opt.price(), 300)
+# -> couverture IC95 = 0.930 [0.895, 0.954], KS p = 0.94, biais p = 0.97 : OK
+
+simulate_delta_hedge(100, 100, 1, 0.03, sigma_real=0.15, sigma_implied=0.25).mean   # ≈ 3.96
+```
+
+| Méthode | Écart à la formule fermée | Remarque |
+|---|---|---|
+| Monte Carlo (200 000 trajectoires) | 0,014 (err. std 0,035) | $O(N^{-1/2})$, pente mesurée −0,50 |
+| QMC Sobol randomisé | 0,0005 | ≈ $O(N^{-1})$ |
+| EDP Crank-Nicolson + Rannacher + payoff lissé | 0,0001 | **ordre 2,01 mesuré** |
+| Arbre de Leisen-Reimer | 5·10⁻⁷ | |
+
+<p align="center">
+  <img src="docs/figures/bs_pde_convergence.png" width="48%"/>
+  <img src="docs/figures/bs_hedging_error.png" width="48%"/>
+  <img src="docs/figures/bs_gamma_pnl.png" width="40%"/>
+  <img src="docs/figures/bs_mle_precision.png" width="48%"/>
+</p>
+
 ## Exemples (`examples/`)
 
 | Script | Ce qu'il montre |
@@ -70,6 +106,9 @@ print(mc.MonteCarloEngine(100_000).greeks(bs3, ac, {"vol": 0.01}))   # delta, ga
 | `09_var_es.py` | VaR 99 % / ES 97,5 % : revalorisation complète vs delta-gamma, Student-t |
 | `10_mlmc.py` | MLMC : β ≈ 1 (Euler) vs 2 (Milstein), gain ×164 |
 | `11_rates.py` | Hull-White, LMM, swaptions bermudéennes |
+| `12_black_scholes_lab.py` | Quatre méthodes, générateurs gaussiens, couverture des IC, ordre de l'EDP |
+| `13_couverture_delta.py` | Erreur de couverture en $n^{-1/2}$, P&L de gamma, coûts de Leland |
+| `14_inference_statistique.py` | EMV : σ se précise, μ jamais ; efficacité des estimateurs de range |
 
 ```bash
 cd examples && python 01_convergence_reduction_variance.py
@@ -95,10 +134,23 @@ cd examples && python 01_convergence_reduction_variance.py
 | EE d'un swap à une date de reset | XVA Hull-White | swaption de Jamshidian ±0,3 % |
 | 7 Greeks Heston | 1 passe AAD (0,25 s) | 14 revalorisations (2,2 s), mêmes valeurs |
 
+## Qualité logicielle
+
+* **98 tests** (`pytest`) dont des **tests de propriétés** (*hypothesis*, 1 500 cas générés) : parité call-put,
+  bornes d'arbitrage, convexité en strike, équation de Black-Scholes sur les Greeks, sur des
+  centaines de jeux de paramètres tirés au hasard ;
+* tests **statistiques** : tolérances exprimées en erreurs standard, couverture des IC testée
+  par IC de Wilson, normalité par Kolmogorov-Smirnov ;
+* **couverture de code 93 %** (branches incluses), seuil à 90 % imposé en CI ;
+* **ruff** (lint + format) et **mypy** sans aucune alerte ; package typé (`py.typed`) ;
+* CI GitHub Actions : lint, typage, tests sur Python 3.10 / 3.11 / 3.12 ;
+* `make check` reproduit la CI en local.
+
 ## Architecture
 
 ```
 mcfin/
+├── blackscholes/    pricer, sampling, pde, hedging, estimation, diagnostics
 ├── core/            rng.py (PRNG, Sobol, pont brownien, ACP), timegrid.py, results.py
 ├── market/          curves.py (plate, interpolée, Nelson-Siegel-Svensson), volsurface.py (SSVI, Dupire)
 ├── analytics/       formules fermées : black_scholes, heston (+calibration), exotics, sabr, lattice

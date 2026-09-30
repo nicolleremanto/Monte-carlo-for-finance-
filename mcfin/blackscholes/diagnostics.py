@@ -16,17 +16,18 @@ propriétés comme en statistique inférentielle.
 * ``convergence_rate`` : régression log-log de l'erreur standard sur N ;
   la pente vaut -1/2 en Monte Carlo et s'approche de -1 en QMC.
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 from scipy import stats
 
 from ..core.results import MCResult
 
-__all__ = ["CoverageReport", "coverage_study", "convergence_rate"]
+__all__ = ["CoverageReport", "convergence_rate", "coverage_study"]
 
 
 @dataclass
@@ -45,9 +46,11 @@ class CoverageReport:
 
     def __repr__(self) -> str:
         lo, hi = self.coverage_ci
-        return (f"CoverageReport(couverture IC95 = {self.coverage:.3f} [{lo:.3f}, {hi:.3f}], "
-                f"KS p = {self.ks_pvalue:.3f}, biais t = {self.bias_t_stat:+.2f} "
-                f"(p = {self.bias_pvalue:.3f}), {'OK' if self.passed else 'ÉCHEC'})")
+        return (
+            f"CoverageReport(couverture IC95 = {self.coverage:.3f} [{lo:.3f}, {hi:.3f}], "
+            f"KS p = {self.ks_pvalue:.3f}, biais t = {self.bias_t_stat:+.2f} "
+            f"(p = {self.bias_pvalue:.3f}), {'OK' if self.passed else 'ÉCHEC'})"
+        )
 
 
 def _wilson(k: int, n: int, level: float = 0.95) -> tuple[float, float]:
@@ -59,8 +62,9 @@ def _wilson(k: int, n: int, level: float = 0.95) -> tuple[float, float]:
     return float(centre - half), float(centre + half)
 
 
-def coverage_study(estimator: Callable[[int], MCResult], true_value: float,
-                   n_replications: int = 500) -> CoverageReport:
+def coverage_study(
+    estimator: Callable[[int], MCResult], true_value: float, n_replications: int = 500
+) -> CoverageReport:
     """``estimator(seed) -> MCResult`` ; ``true_value`` : prix exact."""
     z = np.empty(n_replications)
     err = np.empty(n_replications)
@@ -75,9 +79,14 @@ def coverage_study(estimator: Callable[[int], MCResult], true_value: float,
         dof = res.dof
     ref = "norm" if dof is None else stats.t(dof).cdf
     t = stats.ttest_1samp(err, 0.0)
-    return CoverageReport(inside / n_replications, _wilson(inside, n_replications),
-                          float(stats.kstest(z, ref).pvalue), float(t.statistic),
-                          float(t.pvalue), z)
+    return CoverageReport(
+        inside / n_replications,
+        _wilson(inside, n_replications),
+        float(stats.kstest(z, ref).pvalue),
+        float(t.statistic),
+        float(t.pvalue),
+        z,
+    )
 
 
 def convergence_rate(estimator: Callable[[int], MCResult], n_values) -> dict:
@@ -86,5 +95,4 @@ def convergence_rate(estimator: Callable[[int], MCResult], n_values) -> dict:
     se = np.array([estimator(int(k)).stderr for k in n])
     fit = stats.linregress(np.log(n), np.log(se))
     half = stats.t.ppf(0.975, n.size - 2) * fit.stderr
-    return {"slope": float(fit.slope), "slope_ci": (fit.slope - half, fit.slope + half),
-            "n": n, "stderr": se}
+    return {"slope": float(fit.slope), "slope_ci": (fit.slope - half, fit.slope + half), "n": n, "stderr": se}

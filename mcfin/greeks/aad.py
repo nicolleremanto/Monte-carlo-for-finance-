@@ -22,14 +22,25 @@ vecteur-jacobien (VJP). Les tableaux numpy (une valeur par trajectoire)
 sont des « scalaires vectorisés » ; la diffusion (broadcasting) est
 inversée par sommation dans la passe arrière.
 """
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 
-__all__ = ["Tape", "Var", "exp", "log", "sqrt", "maximum", "where", "smooth_step",
-           "mean", "aad_greeks"]
+__all__ = [
+    "Tape",
+    "Var",
+    "aad_greeks",
+    "exp",
+    "log",
+    "maximum",
+    "mean",
+    "smooth_step",
+    "sqrt",
+    "where",
+]
 
 
 def _unbroadcast(g: np.ndarray, shape: tuple) -> np.ndarray:
@@ -49,15 +60,15 @@ class Tape:
         self.shapes: list[tuple] = []
         self.parents: list[tuple] = []
 
-    def _record(self, value, parents) -> "Var":
+    def _record(self, value, parents) -> Var:
         self.shapes.append(np.shape(value))
         self.parents.append(tuple(parents))
         return Var(value, self, len(self.shapes) - 1)
 
-    def variable(self, value) -> "Var":
+    def variable(self, value) -> Var:
         return self._record(np.asarray(value, dtype=float), ())
 
-    def gradient(self, out: "Var", inputs: list["Var"]) -> list:
+    def gradient(self, out: Var, inputs: list[Var]) -> list:
         adj: list = [None] * len(self.shapes)
         adj[out.idx] = np.ones(self.shapes[out.idx])
         for i in range(out.idx, -1, -1):
@@ -69,13 +80,13 @@ class Tape:
                 adj[p] = c if adj[p] is None else adj[p] + c
             if self.parents[i]:
                 adj[i] = None  # libère la mémoire des adjoints intermédiaires
-        return [adj[v.idx] if adj[v.idx] is not None else np.zeros(self.shapes[v.idx])
-                for v in inputs]
+        return [adj[v.idx] if adj[v.idx] is not None else np.zeros(self.shapes[v.idx]) for v in inputs]
 
 
 class Var:
     """Variable enregistrée sur le ruban (valeur scalaire ou tableau)."""
-    __slots__ = ("value", "tape", "idx")
+
+    __slots__ = ("idx", "tape", "value")
     __array_priority__ = 1000
     __array_ufunc__ = None  # ndarray (op) Var -> délègue aux opérateurs réfléchis de Var
 
@@ -195,6 +206,7 @@ def mean(x, axis=None):
         if axis is not None:
             g = np.expand_dims(g, axis)
         return np.broadcast_to(g / n, shape)
+
     return x._new(np.mean(x.value, axis=axis), [(x.idx, vjp)])
 
 
@@ -204,8 +216,7 @@ def smooth_step(x, eps: float):
     return 1.0 / (1.0 + exp(-x / eps))
 
 
-def aad_greeks(pricer: Callable, params: dict[str, float], z: np.ndarray,
-               batch_size: int = 20_000) -> dict:
+def aad_greeks(pricer: Callable, params: dict[str, float], z: np.ndarray, batch_size: int = 20_000) -> dict:
     """Prix et gradient complet par AAD, par lots.
 
     ``pricer(p: dict[str, Var], z_batch) -> Var`` renvoie la moyenne des flux
@@ -217,7 +228,7 @@ def aad_greeks(pricer: Callable, params: dict[str, float], z: np.ndarray,
     n = z.shape[0]
     prices, grads, weights = [], [], []
     for start in range(0, n, batch_size):
-        zb = z[start:start + batch_size]
+        zb = z[start : start + batch_size]
         tape = Tape()
         pv = {k: tape.variable(v) for k, v in params.items()}
         out = pricer(pv, zb)
@@ -232,6 +243,5 @@ def aad_greeks(pricer: Callable, params: dict[str, float], z: np.ndarray,
     for i, k in enumerate(names):
         res[k] = float(w @ grads[:, i])
         if nb > 1:
-            res[k + "_stderr"] = float(np.sqrt(np.sum(w**2 * (grads[:, i] - res[k]) ** 2)
-                                               * nb / (nb - 1)))
+            res[k + "_stderr"] = float(np.sqrt(np.sum(w**2 * (grads[:, i] - res[k]) ** 2) * nb / (nb - 1)))
     return res

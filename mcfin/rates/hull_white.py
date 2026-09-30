@@ -22,6 +22,7 @@ Swaptions européennes : décomposition de Jamshidian (1989) en somme
 d'options sur zéro-coupons (le prix de l'obligation à coupons est monotone
 en x).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -32,14 +33,14 @@ from scipy.special import ndtr
 
 from ..market.curves import Curve
 
-__all__ = ["HullWhite", "HWPaths"]
+__all__ = ["HWPaths", "HullWhite"]
 
 
 @dataclass
 class HWPaths:
-    times: np.ndarray       # (nt,)
-    x: np.ndarray           # (n, nt) facteur OU
-    discount: np.ndarray    # (n, nt) déflateur D(0, t) = 1/B(t)
+    times: np.ndarray  # (nt,)
+    x: np.ndarray  # (n, nt) facteur OU
+    discount: np.ndarray  # (n, nt) déflateur D(0, t) = 1/B(t)
 
     def index(self, t: float) -> int:
         i = int(np.searchsorted(self.times, t - 1e-10))
@@ -65,8 +66,10 @@ class HullWhite:
         T = np.asarray(T, dtype=float)
         B = self.B(t, T)
         ratio = self.curve.df(T) / self.curve.df(t)
-        conv = s**2 / (4 * a) * (1 - np.exp(-2 * a * t)) * B**2 \
+        conv = (
+            s**2 / (4 * a) * (1 - np.exp(-2 * a * t)) * B**2
             + B * s**2 / (2 * a**2) * (1 - np.exp(-a * t)) ** 2
+        )
         return ratio * np.exp(-B * x - conv)
 
     def _zcb_vol(self, T, S):
@@ -98,6 +101,7 @@ class HullWhite:
 
         def f(x):
             return float(np.sum(c * self.bond(expiry, pay, x)) - 1.0)
+
         x_star = brentq(f, -5.0, 5.0)
         K_i = self.bond(expiry, pay, x_star)
         # payer = put sur l'obligation à coupons de strike 1
@@ -115,8 +119,7 @@ class HullWhite:
         return (p0 - P[:, -1]) / annuity, annuity
 
     # --- simulation --------------------------------------------------------------
-    def simulate(self, times, n_paths: int, seed: int | None = 0,
-                 antithetic: bool = False) -> HWPaths:
+    def simulate(self, times, n_paths: int, seed: int | None = 0, antithetic: bool = False) -> HWPaths:
         a, s = self.a, self.sigma
         t = np.unique(np.concatenate(([0.0], np.asarray(times, dtype=float))))
         rng = np.random.default_rng(seed)
@@ -128,7 +131,7 @@ class HullWhite:
         else:
             z = rng.standard_normal((n, t.size - 1, 2))
         x = np.zeros((n, t.size))
-        I = np.zeros(n)
+        integ = np.zeros(n)  # ∫_0^t x_s ds
         disc = np.ones((n, t.size))
         for i, dt in enumerate(np.diff(t)):
             e = np.exp(-a * dt)
@@ -140,11 +143,10 @@ class HullWhite:
             l22 = np.sqrt(max(v2 - l21**2, 0.0))
             e1 = l11 * z[:, i, 0]
             e2 = l21 * z[:, i, 0] + l22 * z[:, i, 1]
-            I = I + x[:, i] * (1 - e) / a + e2
+            integ = integ + x[:, i] * (1 - e) / a + e2
             x[:, i + 1] = x[:, i] * e + e1
             T = t[i + 1]
             # ∫_0^T φ = -ln P(0,T) + σ²/(2a²)[T - 2(1-e^{-aT})/a + (1-e^{-2aT})/(2a)]
-            conv = s**2 / (2 * a**2) * (T - 2 * (1 - np.exp(-a * T)) / a
-                                        + (1 - np.exp(-2 * a * T)) / (2 * a))
-            disc[:, i + 1] = self.curve.df(T) * np.exp(-I - conv)
+            conv = s**2 / (2 * a**2) * (T - 2 * (1 - np.exp(-a * T)) / a + (1 - np.exp(-2 * a * T)) / (2 * a))
+            disc[:, i + 1] = self.curve.df(T) * np.exp(-integ - conv)
         return HWPaths(times=t, x=x, discount=disc)

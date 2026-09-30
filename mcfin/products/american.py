@@ -23,6 +23,7 @@ A-B construisent M à partir de la règle d'exercice L-S :
 les espérances conditionnelles étant estimées par simulations imbriquées.
 L'écart de dualité mesure la sous-optimalité de la règle d'exercice.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -34,7 +35,7 @@ from ..analytics.black_scholes import option_sign
 from ..core.results import MCResult, Paths
 from ..core.timegrid import TimeGrid
 from ..market.curves import FlatCurve, as_curve
-from .base import Product, time_index
+from .base import Product, time_indices
 
 __all__ = ["BermudanOption", "LongstaffSchwartz", "andersen_broadie_upper_bound"]
 
@@ -46,6 +47,7 @@ class BermudanOption(Product):
     kind : "vanilla" (1 actif), "max" / "min" (call/put sur max/min des
     spots), "basket" (moyenne pondérée des spots).
     """
+
     strike: float
     exercise_times: np.ndarray
     option_type: str = "put"
@@ -101,8 +103,8 @@ class LongstaffSchwartz:
     def _spot_at(self, paths: Paths, j: int) -> np.ndarray:
         return paths.spot[:, j]
 
-    def fit(self, paths: Paths, product: BermudanOption) -> "LongstaffSchwartz":
-        idx = time_index(paths, product.exercise_times)
+    def fit(self, paths: Paths, product: BermudanOption) -> LongstaffSchwartz:
+        idx = time_indices(paths, product.exercise_times)
         K = idx.size
         h = [product.exercise_value(self._spot_at(paths, j)) for j in idx]
         df = [np.broadcast_to(paths.df(j), (paths.n_paths,)) for j in idx]
@@ -122,8 +124,9 @@ class LongstaffSchwartz:
         self.in_sample_price = float(cf.mean())
         return self
 
-    def exercise(self, k: int, s: np.ndarray, h: np.ndarray, product: BermudanOption,
-                 last: bool) -> np.ndarray:
+    def exercise(
+        self, k: int, s: np.ndarray, h: np.ndarray, product: BermudanOption, last: bool
+    ) -> np.ndarray:
         """Décision d'exercice de la règle estimée à la date d'indice k."""
         if last:
             return h > 0
@@ -135,7 +138,7 @@ class LongstaffSchwartz:
 
     def price(self, paths: Paths, product: BermudanOption) -> MCResult:
         """Valorisation hors échantillon (borne inférieure)."""
-        idx = time_index(paths, product.exercise_times)
+        idx = time_indices(paths, product.exercise_times)
         K = idx.size
         n = paths.n_paths
         alive = np.ones(n, dtype=bool)
@@ -148,23 +151,31 @@ class LongstaffSchwartz:
             cf = np.where(ex, h * np.broadcast_to(paths.df(j), (n,)), cf)
             tau = np.where(ex, paths.times[j], tau)
             alive &= ~ex
-        res = MCResult(float(cf.mean()), float(cf.std(ddof=1) / np.sqrt(n)), n,
-                       method="LSM (hors échantillon)")
+        res = MCResult(
+            float(cf.mean()), float(cf.std(ddof=1) / np.sqrt(n)), n, method="LSM (hors échantillon)"
+        )
         res.extra["mean_exercise_time"] = float(np.nanmean(tau))
         res.extra["prob_exercise"] = float(np.isfinite(tau).mean())
         return res
 
 
-def andersen_broadie_upper_bound(model, product: BermudanOption, lsm: LongstaffSchwartz,
-                                 lower_bound: float, n_outer: int = 1000,
-                                 n_inner: int = 500, seed: int = 1234,
-                                 chunk: int = 200) -> MCResult:
+def andersen_broadie_upper_bound(
+    model,
+    product: BermudanOption,
+    lsm: LongstaffSchwartz,
+    lower_bound: float,
+    n_outer: int = 1000,
+    n_inner: int = 500,
+    seed: int = 1234,
+    chunk: int = 200,
+) -> MCResult:
     """Borne supérieure duale d'Andersen-Broadie (modèle Black-Scholes, taux plats).
 
     Pour le GBM, S_{t_j} = S_{t_k} · R_{k,j} où R est indépendant de S_{t_k} :
     les simulations imbriquées se font sur des trajectoires « unitaires ».
     """
     from ..models.equity import BlackScholes
+
     if not isinstance(model, BlackScholes):
         raise TypeError("implémenté pour BlackScholes (multi-actifs)")
     r_curve = as_curve(model.rate)
@@ -177,10 +188,11 @@ def andersen_broadie_upper_bound(model, product: BermudanOption, lsm: LongstaffS
     grid = TimeGrid.build(t_ex)
     z = rng.standard_normal((n_outer, grid.n_steps, model.n_factors))
     outer = model.simulate(grid, z)
-    idx = time_index(outer, t_ex)
+    idx = time_indices(outer, t_ex)
     disc = r_curve.df(t_ex)
-    unit = BlackScholes(spot=np.ones(d) if d > 1 else 1.0, vol=model.vol, rate=model.rate,
-                        div=model.div, corr=model.corr)
+    unit = BlackScholes(
+        spot=np.ones(d) if d > 1 else 1.0, vol=model.vol, rate=model.rate, div=model.div, corr=model.corr
+    )
 
     h_disc = np.empty((n_outer, K))
     L = np.empty((n_outer, K))
@@ -191,13 +203,13 @@ def andersen_broadie_upper_bound(model, product: BermudanOption, lsm: LongstaffS
         h_disc[:, k] = h_k * disc[k]
         ex_k = lsm.exercise(k, s_k, h_k, product, k == K - 1)
         if k < K - 1:
-            rel_times = t_ex[k + 1:] - t_ex[k]
+            rel_times = t_ex[k + 1 :] - t_ex[k]
             g = TimeGrid.build(rel_times)
             for c in range(0, n_outer, chunk):
-                sk = s_k[c:c + chunk]
+                sk = s_k[c : c + chunk]
                 m = sk.shape[0]
                 zi = rng.standard_normal((m * n_inner, g.n_steps, unit.n_factors))
-                rel = unit.simulate(g, zi).spot[:, 1:]            # (m*n_in, K-k-1[, d])
+                rel = unit.simulate(g, zi).spot[:, 1:]  # (m*n_in, K-k-1[, d])
                 if d == 1:
                     s_in = np.repeat(sk, n_inner)[:, None] * rel
                 else:
@@ -211,7 +223,7 @@ def andersen_broadie_upper_bound(model, product: BermudanOption, lsm: LongstaffS
                     ex = alive & lsm.exercise(kk, s_j, h_j, product, kk == K - 1)
                     val = np.where(ex, h_j * disc[kk], val)
                     alive &= ~ex
-                Q[c:c + chunk, k] = val.reshape(m, n_inner).mean(axis=1)
+                Q[c : c + chunk, k] = val.reshape(m, n_inner).mean(axis=1)
         L[:, k] = np.where(ex_k, h_disc[:, k], Q[:, k])
     M = np.empty((n_outer, K))
     M[:, 0] = L[:, 0] - lower_bound
@@ -219,8 +231,9 @@ def andersen_broadie_upper_bound(model, product: BermudanOption, lsm: LongstaffS
         M[:, k] = M[:, k - 1] + L[:, k] - Q[:, k - 1]
     dual = np.max(h_disc - M, axis=1)
     upper = float(dual.mean())
-    res = MCResult(upper, float(dual.std(ddof=1) / np.sqrt(n_outer)), n_outer,
-                   method="Andersen-Broadie (dual)")
+    res = MCResult(
+        upper, float(dual.std(ddof=1) / np.sqrt(n_outer)), n_outer, method="Andersen-Broadie (dual)"
+    )
     res.extra["duality_gap"] = upper - lower_bound
     res.extra["point_estimate"] = 0.5 * (upper + lower_bound)
     return res

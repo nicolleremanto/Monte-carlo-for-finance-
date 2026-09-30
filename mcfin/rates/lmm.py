@@ -22,9 +22,11 @@ Contexte post-LIBOR : l'Euribor subsiste (et donc le LMM classique) ; pour
 les taux RFR composés (€STR, SOFR), l'extension naturelle est le « Forward
 Market Model » de Lyashenko & Mercurio (2019).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 import numpy as np
 from scipy.integrate import quad
@@ -32,14 +34,14 @@ from scipy.integrate import quad
 from ..analytics.black_scholes import black_price
 from ..market.curves import Curve
 
-__all__ = ["LiborMarketModel", "LMMPaths"]
+__all__ = ["LMMPaths", "LiborMarketModel"]
 
 
 @dataclass
 class LMMPaths:
-    tenor: np.ndarray       # T_0..T_N
-    forwards: np.ndarray    # (n, N+1, N) : forwards[:, k, j] = L_j(T_k) (NaN si j < k)
-    numeraire: np.ndarray   # (n, N+1) : B(T_k)
+    tenor: np.ndarray  # T_0..T_N
+    forwards: np.ndarray  # (n, N+1, N) : forwards[:, k, j] = L_j(T_k) (NaN si j < k)
+    numeraire: np.ndarray  # (n, N+1) : B(T_k)
 
     def bond(self, k: int, m: int) -> np.ndarray:
         """P(T_k, T_m) pour m >= k (produit des facteurs 1/(1+τL))."""
@@ -99,9 +101,12 @@ class LiborMarketModel:
 
     def caplet_price(self, i: int, K: float) -> float:
         """Caplet de Black sur L_i (fixing T_i, paiement T_{i+1})."""
-        return float(self.tau[i] * black_price(self.L0[i], K, self.tenor[i],
-                                               self.curve.df(self.tenor[i + 1]),
-                                               self.caplet_black_vol(i)))
+        return float(
+            self.tau[i]
+            * black_price(
+                self.L0[i], K, self.tenor[i], self.curve.df(self.tenor[i + 1]), self.caplet_black_vol(i)
+            )
+        )
 
     def swaption_rebonato(self, s: int, e: int, K: float) -> float:
         """Approximation de Rebonato (poids gelés) pour la swaption payeuse
@@ -119,8 +124,7 @@ class LiborMarketModel:
                 if b_ < a_:
                     cov[a_, b_] = cov[b_, a_]
                     continue
-                cov[a_, b_] = self.rho[i, j] * quad(
-                    lambda t: self.vol(i, t) * self.vol(j, t), 0, Ts)[0]
+                cov[a_, b_] = self.rho[i, j] * quad(lambda t: self.vol(i, t) * self.vol(j, t), 0, Ts)[0]
         L = self.L0[idx]
         var = (w * L) @ cov @ (w * L) / S**2
         return float(A * black_price(S, K, Ts, 1.0, np.sqrt(var / Ts)))
@@ -129,7 +133,7 @@ class LiborMarketModel:
     def _step_cov(self, t0: float, t1: float, alive: np.ndarray) -> np.ndarray:
         x, wts = np.polynomial.legendre.leggauss(5)
         ts = 0.5 * (t1 - t0) * x + 0.5 * (t0 + t1)
-        sig = np.array([self.vol(alive, t) for t in ts])          # (5, m)
+        sig = np.array([self.vol(alive, t) for t in ts])  # (5, m)
         integ = np.einsum("q,qi,qj->ij", 0.5 * (t1 - t0) * wts, sig, sig)
         return self.rho[np.ix_(alive, alive)] * integ
 
@@ -143,12 +147,11 @@ class LiborMarketModel:
     def _drift(self, logL: np.ndarray, alive: np.ndarray, C: np.ndarray) -> np.ndarray:
         L = np.exp(logL)
         tl = self.tau[alive] * L
-        g = tl / (1 + tl)                                   # (n, m)
+        g = tl / (1 + tl)  # (n, m)
         # μ_i Δ = Σ_{j<=i, j vivant} C_ij g_j  (produit triangulaire inférieur)
         return g @ np.tril(C).T - 0.5 * np.diag(C)[None, :]
 
-    def simulate(self, n_paths: int, seed: int | None = 0,
-                 antithetic: bool = False) -> LMMPaths:
+    def simulate(self, n_paths: int, seed: int | None = 0, antithetic: bool = False) -> LMMPaths:
         rng = np.random.default_rng(seed)
         N = self.N
         n = n_paths
@@ -162,7 +165,7 @@ class LiborMarketModel:
             alive = np.arange(k + 1, N)
             if alive.size:
                 ts = np.linspace(self.tenor[k], self.tenor[k + 1], self.steps_per_period + 1)
-                for t0, t1 in zip(ts[:-1], ts[1:]):
+                for t0, t1 in pairwise(ts):
                     C = self._step_cov(t0, t1, alive)
                     A = self._loadings(C)
                     if antithetic:
@@ -176,5 +179,5 @@ class LiborMarketModel:
                     pred = x + mu0 + dW
                     mu1 = self._drift(pred, alive, C)
                     logL[:, alive] = x + 0.5 * (mu0 + mu1) + dW
-            fwd[:, k + 1, k + 1:] = np.exp(logL[:, k + 1:])
+            fwd[:, k + 1, k + 1 :] = np.exp(logL[:, k + 1 :])
         return LMMPaths(tenor=self.tenor, forwards=fwd, numeraire=numer)

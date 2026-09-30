@@ -1,4 +1,5 @@
 """Options européennes mono et multi sous-jacents."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,7 +10,7 @@ from ..analytics.black_scholes import option_sign
 from ..core.results import Paths
 from .base import Product
 
-__all__ = ["EuropeanOption", "DigitalOption", "BasketOption", "RainbowOption"]
+__all__ = ["BasketOption", "DigitalOption", "EuropeanOption", "RainbowOption"]
 
 
 @dataclass
@@ -31,6 +32,7 @@ class EuropeanOption(Product):
 class DigitalOption(Product):
     """Digitale cash-or-nothing (payoff discontinu : cas d'école des Greeks
     pathwise en échec, cf. mcfin.greeks)."""
+
     strike: float
     maturity: float
     option_type: str = "call"
@@ -48,6 +50,7 @@ class DigitalOption(Product):
 @dataclass
 class BasketOption(Product):
     """Option sur panier Σ w_i S_i(T)/S_i(0) (performances pondérées)."""
+
     strike: float
     maturity: float
     weights: np.ndarray
@@ -69,6 +72,7 @@ class BasketOption(Product):
 @dataclass
 class RainbowOption(Product):
     """Worst-of / best-of sur performances : payoff (ω(min_i ou max_i S_i(T)/S_i(0) - K))^+."""
+
     strike: float
     maturity: float
     kind: str = "worst"

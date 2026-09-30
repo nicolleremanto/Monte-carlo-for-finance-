@@ -1,5 +1,6 @@
 """Tests de propriétés (hypothesis) : relations d'absence d'arbitrage que toute
 formule de Black-Scholes doit vérifier, sur des paramètres tirés au hasard."""
+
 import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -34,9 +35,9 @@ def test_no_arbitrage_bounds(S, K, T, r, s, q):
 def test_monotone_and_convex_in_strike(S, K, T, r, s, q):
     h = 5.0
     c0, c1, c2 = (float(bs_price(S, k, T, r, s, q)) for k in (K, K + h, K + 2 * h))
-    assert c1 <= c0 + 1e-10                                   # décroissant en K
-    assert c0 - 2 * c1 + c2 >= -1e-9                         # convexe en K (densité >= 0)
-    assert (c0 - c1) / h <= np.exp(-r * T) + 1e-10           # pente bornée par l'actualisation
+    assert c1 <= c0 + 1e-10  # décroissant en K
+    assert c0 - 2 * c1 + c2 >= -1e-9  # convexe en K (densité >= 0)
+    assert (c0 - c1) / h <= np.exp(-r * T) + 1e-10  # pente bornée par l'actualisation
 
 
 @SETTINGS
@@ -56,6 +57,6 @@ def test_implied_vol_roundtrip(S, K, T, r, s, q):
     F = S * np.exp((r - q) * T)
     otype = "call" if K >= F else "put"
     price = float(bs_price(S, K, T, r, s, q, otype))
-    if price < 1e-8 * S:                                     # prix numériquement nul : IV non identifiable
+    if price < 1e-8 * S:  # prix numériquement nul : IV non identifiable
         return
     assert abs(implied_vol(price, S, K, T, r, q, otype) - s) < 1e-7

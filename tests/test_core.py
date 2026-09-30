@@ -41,6 +41,7 @@ def test_sobol_dimension_is_checked():
 
 def test_poisson_inverse_matches_scipy(rng):
     from scipy.stats import poisson
+
     u = rng.random(20_000)
     for mu in (0.01, 0.7, 5.0):
         assert np.array_equal(poisson_inverse(u, mu), poisson.ppf(u, mu))

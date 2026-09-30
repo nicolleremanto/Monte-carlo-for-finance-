@@ -5,22 +5,21 @@ Les courbes servent à la fois de courbe d'actualisation (r) et de courbe de
 rendement du dividende / repo (q) pour les modèles actions : le forward
 vaut F(t) = S0 · D_q(t) / D_r(t).
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 import numpy as np
 
-__all__ = ["Curve", "FlatCurve", "InterpolatedCurve", "NelsonSiegelSvensson",
-           "ShiftedCurve", "as_curve"]
+__all__ = ["Curve", "FlatCurve", "InterpolatedCurve", "NelsonSiegelSvensson", "ShiftedCurve", "as_curve"]
 
 
 class Curve(ABC):
     """Courbe de facteurs d'actualisation t -> D(0, t)."""
 
     @abstractmethod
-    def df(self, t):
-        ...
+    def df(self, t): ...
 
     def zero_rate(self, t):
         t = np.asarray(t, dtype=float)
@@ -42,7 +41,7 @@ class Curve(ABC):
         """Taux forward simple (type Euribor, mono-courbe) entre t1 et t2."""
         return (self.df(t1) / self.df(t2) - 1.0) / (np.asarray(t2) - np.asarray(t1))
 
-    def shift(self, h: float) -> "Curve":
+    def shift(self, h: float) -> Curve:
         """Choc parallèle de ``h`` sur les taux zéro continus."""
         return ShiftedCurve(self, h)
 
@@ -60,7 +59,7 @@ class FlatCurve(Curve):
     def inst_forward(self, t, h: float = 1e-5):
         return np.full_like(np.asarray(t, dtype=float), self.rate)
 
-    def shift(self, h: float) -> "FlatCurve":
+    def shift(self, h: float) -> FlatCurve:
         return FlatCurve(self.rate + h)
 
     def __repr__(self) -> str:

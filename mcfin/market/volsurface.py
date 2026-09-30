@@ -19,19 +19,19 @@ SSVI (Gatheral & Jacquier 2014, « Arbitrage-free SVI volatility surfaces ») :
 Conditions suffisantes d'absence d'arbitrage statique : θ_T croissante,
 0 < γ <= 1/2 et η(1 + |ρ|) <= 2.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 import numpy as np
 
-__all__ = ["ImpliedVolSurface", "FlatVolSurface", "SSVISurface"]
+__all__ = ["FlatVolSurface", "ImpliedVolSurface", "SSVISurface"]
 
 
 class ImpliedVolSurface(ABC):
     @abstractmethod
-    def total_variance(self, y, T):
-        ...
+    def total_variance(self, y, T): ...
 
     def implied_vol(self, y, T):
         T = np.asarray(T, dtype=float)
@@ -42,20 +42,22 @@ class ImpliedVolSurface(ABC):
         return (self.total_variance(y + h, T) - self.total_variance(y - h, T)) / (2 * h)
 
     def w_yy(self, y, T, h=1e-4):
-        return (self.total_variance(y + h, T) - 2 * self.total_variance(y, T)
-                + self.total_variance(y - h, T)) / h**2
+        return (
+            self.total_variance(y + h, T) - 2 * self.total_variance(y, T) + self.total_variance(y - h, T)
+        ) / h**2
 
     def w_T(self, y, T, h=1e-5):
         T = np.asarray(T, dtype=float)
-        return (self.total_variance(y, T + h) - self.total_variance(y, np.maximum(T - h, 1e-8))) \
-            / (T + h - np.maximum(T - h, 1e-8))
+        return (self.total_variance(y, T + h) - self.total_variance(y, np.maximum(T - h, 1e-8))) / (
+            T + h - np.maximum(T - h, 1e-8)
+        )
 
     def local_variance(self, y, T, floor: float = 1e-8):
         """Variance locale de Dupire au point (y = ln(K/F_T), T)."""
         y = np.asarray(y, dtype=float)
         w = np.maximum(self.total_variance(y, T), 1e-12)
         wy, wyy, wt = self.w_y(y, T), self.w_yy(y, T), self.w_T(y, T)
-        den = (1 - y / w * wy + 0.25 * (-0.25 - 1 / w + y * y / (w * w)) * wy * wy + 0.5 * wyy)
+        den = 1 - y / w * wy + 0.25 * (-0.25 - 1 / w + y * y / (w * w)) * wy * wy + 0.5 * wyy
         return np.maximum(wt, floor) / np.maximum(den, 1e-4)
 
 
@@ -73,11 +75,18 @@ class FlatVolSurface(ImpliedVolSurface):
 class SSVISurface(ImpliedVolSurface):
     """SSVI à terme de variance ATM « mean-reverting » :
 
-        θ_T = σ_∞² T + (σ_0² - σ_∞²)(1 - e^{-λT})/λ    (croissante si σ_0, σ_∞ > 0)
+    θ_T = σ_∞² T + (σ_0² - σ_∞²)(1 - e^{-λT})/λ    (croissante si σ_0, σ_∞ > 0)
     """
 
-    def __init__(self, sigma0: float = 0.2, sigma_inf: float = 0.22, lam: float = 1.0,
-                 rho: float = -0.6, eta: float = 1.0, gamma: float = 0.4):
+    def __init__(
+        self,
+        sigma0: float = 0.2,
+        sigma_inf: float = 0.22,
+        lam: float = 1.0,
+        rho: float = -0.6,
+        eta: float = 1.0,
+        gamma: float = 0.4,
+    ):
         if eta * (1 + abs(rho)) > 2 + 1e-12 or not 0 < gamma <= 0.5:
             raise ValueError("paramètres SSVI hors du domaine sans arbitrage")
         self.sigma0, self.sigma_inf, self.lam = sigma0, sigma_inf, lam
@@ -86,8 +95,10 @@ class SSVISurface(ImpliedVolSurface):
     # terme ATM
     def theta(self, T):
         T = np.asarray(T, dtype=float)
-        return self.sigma_inf**2 * T + (self.sigma0**2 - self.sigma_inf**2) \
-            * (1 - np.exp(-self.lam * T)) / self.lam
+        return (
+            self.sigma_inf**2 * T
+            + (self.sigma0**2 - self.sigma_inf**2) * (1 - np.exp(-self.lam * T)) / self.lam
+        )
 
     def theta_prime(self, T):
         T = np.asarray(T, dtype=float)
@@ -110,7 +121,7 @@ class SSVISurface(ImpliedVolSurface):
         return y, th, ph, a, R
 
     def total_variance(self, y, T):
-        y, th, ph, a, R = self._parts(y, T)
+        y, th, ph, _, R = self._parts(y, T)
         return 0.5 * th * (1 + self.rho * ph * y + R)
 
     def w_y(self, y, T, h=None):
@@ -118,7 +129,7 @@ class SSVISurface(ImpliedVolSurface):
         return 0.5 * th * ph * (self.rho + a / R)
 
     def w_yy(self, y, T, h=None):
-        y, th, ph, a, R = self._parts(y, T)
+        _, th, ph, _, R = self._parts(y, T)
         return 0.5 * th * ph * ph * (1 - self.rho**2) / R**3
 
     def w_T(self, y, T, h=None):

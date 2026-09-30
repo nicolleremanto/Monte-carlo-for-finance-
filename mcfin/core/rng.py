@@ -26,13 +26,14 @@ Techniques de réduction de variance « à la source »
 * moment matching : recentrage/réduction empirique pas par pas ;
 * stratification de W(T) (via le pont brownien).
 """
+
 from __future__ import annotations
 
 import numpy as np
 from scipy.special import ndtri
 from scipy.stats import qmc
 
-__all__ = ["BrownianBridge", "PCAConstruction", "GaussianGenerator", "poisson_inverse"]
+__all__ = ["BrownianBridge", "GaussianGenerator", "PCAConstruction", "poisson_inverse"]
 
 
 def poisson_inverse(u: np.ndarray, mean) -> np.ndarray:
@@ -97,20 +98,20 @@ class BrownianBridge:
             k = j
             while not bmap[k]:
                 k += 1
-            l = j + ((k - 1 - j) >> 1)
-            bmap[l] = i
-            self.bridge_index[i] = l
+            m = j + ((k - 1 - j) >> 1)
+            bmap[m] = i
+            self.bridge_index[i] = m
             self.left_index[i] = j
             self.right_index[i] = k
             if j != 0:
                 span = t[k] - t[j - 1]
-                self.left_weight[i] = (t[k] - t[l]) / span
-                self.right_weight[i] = (t[l] - t[j - 1]) / span
-                self.std_dev[i] = np.sqrt((t[l] - t[j - 1]) * (t[k] - t[l]) / span)
+                self.left_weight[i] = (t[k] - t[m]) / span
+                self.right_weight[i] = (t[m] - t[j - 1]) / span
+                self.std_dev[i] = np.sqrt((t[m] - t[j - 1]) * (t[k] - t[m]) / span)
             else:
-                self.left_weight[i] = (t[k] - t[l]) / t[k]
-                self.right_weight[i] = t[l] / t[k]
-                self.std_dev[i] = np.sqrt(t[l] * (t[k] - t[l]) / t[k])
+                self.left_weight[i] = (t[k] - t[m]) / t[k]
+                self.right_weight[i] = t[m] / t[k]
+                self.std_dev[i] = np.sqrt(t[m] * (t[k] - t[m]) / t[k])
             j = k + 1
             if j >= n:
                 j = 0
@@ -123,13 +124,15 @@ class BrownianBridge:
         n = self.size
         w[:, n - 1] = self.std_dev[0] * z[:, 0]
         for i in range(1, n):
-            j, k, l = self.left_index[i], self.right_index[i], self.bridge_index[i]
+            j, k, m = self.left_index[i], self.right_index[i], self.bridge_index[i]
             if j != 0:
-                w[:, l] = (self.left_weight[i] * w[:, j - 1]
-                           + self.right_weight[i] * w[:, k]
-                           + self.std_dev[i] * z[:, i])
+                w[:, m] = (
+                    self.left_weight[i] * w[:, j - 1]
+                    + self.right_weight[i] * w[:, k]
+                    + self.std_dev[i] * z[:, i]
+                )
             else:
-                w[:, l] = self.right_weight[i] * w[:, k] + self.std_dev[i] * z[:, i]
+                w[:, m] = self.right_weight[i] * w[:, k] + self.std_dev[i] * z[:, i]
         dw = np.diff(w, axis=1, prepend=0.0)
         return dw / self._sqrt_dt[None, :, None]
 
@@ -172,9 +175,15 @@ class GaussianGenerator:
         un pont brownien) : u = (j + U)/J, j = indice de trajectoire mod J.
     """
 
-    def __init__(self, method: str = "pseudo", seed: int | None = None,
-                 antithetic: bool = False, moment_matching: bool = False,
-                 construction: str = "standard", n_strata: int | None = None):
+    def __init__(
+        self,
+        method: str = "pseudo",
+        seed: int | None = None,
+        antithetic: bool = False,
+        moment_matching: bool = False,
+        construction: str = "standard",
+        n_strata: int | None = None,
+    ):
         if method not in ("pseudo", "sobol"):
             raise ValueError(f"méthode inconnue : {method}")
         if construction not in ("standard", "bridge", "pca"):
@@ -187,7 +196,7 @@ class GaussianGenerator:
         self._rng = np.random.default_rng(seed)
         self._sobol: qmc.Sobol | None = None
         self._dim: int | None = None
-        self._builder = None
+        self._builder: BrownianBridge | PCAConstruction | None = None
         self._builder_times: np.ndarray | None = None
 
     # ------------------------------------------------------------------

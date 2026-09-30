@@ -15,10 +15,11 @@ où W̃_i = ∫_{t_{i-1}}^{t_i} (t_i - s)^α dW_s est simulé exactement avec Δ
 d'évaluation optimaux) ; la somme de Riemann est une convolution calculée
 par FFT : coût O(N log N) par trajectoire.
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import numpy as np
 from scipy.signal import fftconvolve
@@ -50,8 +51,9 @@ class RoughBergomi(Model):
     def volterra(self, dt: float, n_steps: int, z: np.ndarray):
         """Renvoie (Y aux points de grille (n, N+1), ΔW (n, N))."""
         a = self.hurst - 0.5
-        cov = np.array([[dt, dt ** (a + 1) / (a + 1)],
-                        [dt ** (a + 1) / (a + 1), dt ** (2 * a + 1) / (2 * a + 1)]])
+        cov = np.array(
+            [[dt, dt ** (a + 1) / (a + 1)], [dt ** (a + 1) / (a + 1), dt ** (2 * a + 1) / (2 * a + 1)]]
+        )
         chol = np.linalg.cholesky(cov)
         dw = chol[0, 0] * z[:, :, 0]
         w_tilde = chol[1, 0] * z[:, :, 0] + chol[1, 1] * z[:, :, 1]
@@ -74,15 +76,17 @@ class RoughBergomi(Model):
         n, N = z.shape[0], grid.n_steps
         t = grid.times
         Y, dw = self.volterra(dt, N, z)
-        v = self._xi(t)[None, :] * np.exp(self.eta * Y - 0.5 * self.eta**2
-                                          * t[None, :] ** (2 * self.hurst))
+        v = self._xi(t)[None, :] * np.exp(self.eta * Y - 0.5 * self.eta**2 * t[None, :] ** (2 * self.hurst))
         db = self.rho * dw + np.sqrt(1 - self.rho**2) * np.sqrt(dt) * z[:, :, 2]
         incr = self.log_drift(t)[None, :] - 0.5 * v[:, :-1] * dt + np.sqrt(v[:, :-1]) * db
-        logs = np.log(self.spot) + np.concatenate([np.zeros((n, 1)), np.cumsum(incr, axis=1)],
-                                                  axis=1)
+        logs = np.log(self.spot) + np.concatenate([np.zeros((n, 1)), np.cumsum(incr, axis=1)], axis=1)
         idx = np.concatenate(([0], grid.obs_idx))
         cumv = np.concatenate([np.zeros((n, 1)), np.cumsum(v[:, :-1] * dt, axis=1)], axis=1)
-        return Paths(times=t[idx], spot=np.exp(logs[:, idx]),
-                     discount=self._deterministic_discount(grid),
-                     int_var=np.diff(cumv[:, idx], axis=1), variance=v[:, idx],
-                     extra={"Y": Y[:, idx]})
+        return Paths(
+            times=t[idx],
+            spot=np.exp(logs[:, idx]),
+            discount=self._deterministic_discount(grid),
+            int_var=np.diff(cumv[:, idx], axis=1),
+            variance=v[:, idx],
+            extra={"Y": Y[:, idx]},
+        )

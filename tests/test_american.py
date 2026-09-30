@@ -1,14 +1,21 @@
 import numpy as np
 import pytest
 
-from mcfin import (BermudanOption, BlackScholes, LongstaffSchwartz, MonteCarloEngine,
-                   andersen_broadie_upper_bound)
+from mcfin import (
+    BermudanOption,
+    BlackScholes,
+    LongstaffSchwartz,
+    MonteCarloEngine,
+    andersen_broadie_upper_bound,
+)
 from mcfin.analytics import leisen_reimer_price
 
 
 def _lsm(model, product, n=100_000):
     lsm = LongstaffSchwartz(degree=3).fit(
-        MonteCarloEngine(n_paths=n, seed=1, antithetic=True).simulate(model, product.observation_times), product)
+        MonteCarloEngine(n_paths=n, seed=1, antithetic=True).simulate(model, product.observation_times),
+        product,
+    )
     lo = lsm.price(MonteCarloEngine(n_paths=n, seed=2).simulate(model, product.observation_times), product)
     return lsm, lo
 
@@ -19,7 +26,7 @@ def test_lsm_american_put_longstaff_schwartz_table():
     put = BermudanOption(40, np.arange(1, 51) / 50, "put")
     _, lo = _lsm(m, put)
     american = leisen_reimer_price(36, 40, 1, 0.06, 0.2)
-    assert lo.price < american + 3 * lo.stderr        # borne inférieure
+    assert lo.price < american + 3 * lo.stderr  # borne inférieure
     assert abs(lo.price - 4.472) < 4 * lo.stderr + 0.01
 
 

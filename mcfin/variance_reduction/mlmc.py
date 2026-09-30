@@ -17,16 +17,17 @@ contre O(ε^{-3}) pour un Monte Carlo standard avec schéma d'Euler.
 L'algorithme adaptatif ajoute des niveaux jusqu'à ce que le biais estimé
 |E[P_L - P_{L-1}]|/(M^α - 1) soit inférieur à ε/sqrt(2).
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import numpy as np
 
 from ..analytics.black_scholes import option_sign
 
-__all__ = ["MLMCResult", "mlmc", "gbm_level_sampler", "heston_level_sampler"]
+__all__ = ["MLMCResult", "gbm_level_sampler", "heston_level_sampler", "mlmc"]
 
 
 @dataclass
@@ -40,15 +41,25 @@ class MLMCResult:
     std_mc_cost: float = 0.0  # coût estimé d'un MC standard au même ε
 
     def __repr__(self):
-        return (f"MLMCResult(price={self.price:.6f}, L={self.n_levels}, N_l={self.n_samples}, "
-                f"cost={self.cost:.3g}, gain vs MC={self.std_mc_cost / max(self.cost, 1):.1f}x)")
+        return (
+            f"MLMCResult(price={self.price:.6f}, L={self.n_levels}, N_l={self.n_samples}, "
+            f"cost={self.cost:.3g}, gain vs MC={self.std_mc_cost / max(self.cost, 1):.1f}x)"
+        )
 
 
-def mlmc(level_sampler: Callable, eps: float, M: int = 2, L_min: int = 2, L_max: int = 12,
-         n_initial: int = 10_000, seed: int = 0, alpha: float | None = 1.0) -> MLMCResult:
+def mlmc(
+    level_sampler: Callable,
+    eps: float,
+    M: int = 2,
+    L_min: int = 2,
+    L_max: int = 12,
+    n_initial: int = 10_000,
+    seed: int = 0,
+    alpha: float | None = 1.0,
+) -> MLMCResult:
     """Algorithme adaptatif de Giles.
 
-    ``level_sampler(l, n, rng) -> (Σ(P_l - P_{l-1}), Σ(P_l - P_{l-1})², coût)``
+    ``level_sampler(lvl, n, rng) -> (Σ(P_l - P_{l-1}), Σ(P_l - P_{l-1})², coût)``
     (au niveau 0 : P_0 seul). ``alpha`` = ordre faible du schéma (1 pour
     Euler et Milstein) ; None => estimé par régression sur les niveaux
     (instable quand les moyennes des corrections sont dominées par le bruit).
@@ -61,18 +72,18 @@ def mlmc(level_sampler: Callable, eps: float, M: int = 2, L_min: int = 2, L_max:
     dN[: L + 1] = n_initial
     cost_per = np.zeros(L_max + 1)
     while dN[: L + 1].sum() > 0:
-        for l in range(L + 1):
-            if dN[l] > 0:
-                s1, s2, c = level_sampler(l, int(dN[l]), rng)
-                sums[l] += (s1, s2, c)
-                N[l] += dN[l]
-        mean = np.array([sums[l][0] / max(N[l], 1) for l in range(L + 1)])
-        var = np.array([max(sums[l][1] / max(N[l], 1) - mean[l] ** 2, 1e-300)
-                        for l in range(L + 1)])
-        cost_per[: L + 1] = [sums[l][2] / max(N[l], 1) for l in range(L + 1)]
+        for lvl in range(L + 1):
+            if dN[lvl] > 0:
+                s1, s2, c = level_sampler(lvl, int(dN[lvl]), rng)
+                sums[lvl] += (s1, s2, c)
+                N[lvl] += dN[lvl]
+        mean = np.array([sums[lvl][0] / max(N[lvl], 1) for lvl in range(L + 1)])
+        var = np.array([max(sums[lvl][1] / max(N[lvl], 1) - mean[lvl] ** 2, 1e-300) for lvl in range(L + 1)])
+        cost_per[: L + 1] = [sums[lvl][2] / max(N[lvl], 1) for lvl in range(L + 1)]
         # allocation optimale (Lagrangien) : N_l = 2 ε^-2 sqrt(V_l/C_l) Σ sqrt(V_k C_k)
-        Ns = np.ceil(2 * eps**-2 * np.sqrt(var / cost_per[: L + 1])
-                     * np.sum(np.sqrt(var * cost_per[: L + 1]))).astype(int)
+        Ns = np.ceil(
+            2 * eps**-2 * np.sqrt(var / cost_per[: L + 1]) * np.sum(np.sqrt(var * cost_per[: L + 1]))
+        ).astype(int)
         dN[: L + 1] = np.maximum(0, Ns - N[: L + 1])
         if dN[: L + 1].sum() == 0:
             # test de convergence du biais sur les derniers niveaux
@@ -87,19 +98,29 @@ def mlmc(level_sampler: Callable, eps: float, M: int = 2, L_min: int = 2, L_max:
                     break
                 L += 1
                 dN[L] = n_initial
-    price = float(sum(sums[l][0] / N[l] for l in range(L + 1)))
-    cost = float(sum(N[l] * cost_per[l] for l in range(L + 1)))
+    price = float(sum(sums[lvl][0] / N[lvl] for lvl in range(L + 1)))
+    cost = float(sum(N[lvl] * cost_per[lvl] for lvl in range(L + 1)))
     v_pl = float(sums[0][1] / N[0] - (sums[0][0] / N[0]) ** 2)
     std_cost = 2 * eps**-2 * v_pl * cost_per[L]
     return MLMCResult(price, L, N[: L + 1].tolist(), mean.tolist(), var.tolist(), cost, std_cost)
 
 
-def gbm_level_sampler(s0, K, T, r, sigma, option_type="call", scheme="milstein",
-                      M: int = 2, payoff: str = "european", base_steps: int = 1):
+def gbm_level_sampler(
+    s0,
+    K,
+    T,
+    r,
+    sigma,
+    option_type="call",
+    scheme="milstein",
+    M: int = 2,
+    payoff: str = "european",
+    base_steps: int = 1,
+):
     """Échantillonneur de niveaux pour un GBM discrétisé (Euler ou Milstein).
 
     payoff : "european" ou "asian" (moyenne arithmétique continue approchée
-    par la règle des trapèzes). Le niveau l utilise base_steps · M^l pas.
+    par la règle des trapèzes). Le niveau lvl utilise base_steps · M^lvl pas.
     """
     w = option_sign(option_type)
 
@@ -113,12 +134,12 @@ def gbm_level_sampler(s0, K, T, r, sigma, option_type="call", scheme="milstein",
         x = s_T if payoff == "european" else avg
         return np.exp(-r * T) * np.maximum(w * (x - K), 0.0)
 
-    def sampler(l, n, rng):
+    def sampler(lvl, n, rng):
         s1 = s2 = 0.0
         chunk = 50_000
         for start in range(0, n, chunk):
             m = min(chunk, n - start)
-            nf = base_steps * M**l
+            nf = base_steps * M**lvl
             hf = T / nf
             dw = np.sqrt(hf) * rng.standard_normal((m, nf))
             sf = np.full(m, float(s0))
@@ -128,7 +149,7 @@ def gbm_level_sampler(s0, K, T, r, sigma, option_type="call", scheme="milstein",
                 af += sf * hf
             af -= 0.5 * sf * hf
             pf = pay(sf, af / T)
-            if l == 0:
+            if lvl == 0:
                 d = pf
             else:
                 nc = nf // M
@@ -143,12 +164,14 @@ def gbm_level_sampler(s0, K, T, r, sigma, option_type="call", scheme="milstein",
                 d = pf - pay(sc, ac / T)
             s1 += d.sum()
             s2 += (d * d).sum()
-        return s1, s2, float(n * base_steps * M**l)
+        return s1, s2, float(n * base_steps * M**lvl)
+
     return sampler
 
 
-def heston_level_sampler(s0, K, T, r, v0, kappa, theta, xi, rho, option_type="call",
-                         M: int = 2, base_steps: int = 8):
+def heston_level_sampler(
+    s0, K, T, r, v0, kappa, theta, xi, rho, option_type="call", M: int = 2, base_steps: int = 8
+):
     """Niveaux Heston (Euler full truncation, log-spot) — illustre le MLMC
     avec un schéma d'ordre faible 1 / fort 1/2 (β ≈ 1). Niveau de base à
     ``base_steps`` pas : un Euler à 1-2 pas est trop grossier pour Heston
@@ -166,21 +189,22 @@ def heston_level_sampler(s0, K, T, r, v0, kappa, theta, xi, rho, option_type="ca
             v += kappa * (theta - vp) * h + xi * sq * z1[:, i]
         return np.exp(-r * T) * np.maximum(w * (s0 * np.exp(x) - K), 0.0)
 
-    def sampler(l, n, rng):
+    def sampler(lvl, n, rng):
         s1 = s2 = 0.0
         for start in range(0, n, 50_000):
             m = min(50_000, n - start)
-            nf = base_steps * M**l
+            nf = base_steps * M**lvl
             hf = T / nf
             dw1 = np.sqrt(hf) * rng.standard_normal((m, nf))
             dw2 = np.sqrt(hf) * rng.standard_normal((m, nf))
             pf = run(dw1, dw2, hf)
-            if l == 0:
+            if lvl == 0:
                 d = pf
             else:
                 nc = nf // M
                 d = pf - run(dw1.reshape(m, nc, M).sum(2), dw2.reshape(m, nc, M).sum(2), T / nc)
             s1 += d.sum()
             s2 += (d * d).sum()
-        return s1, s2, float(n * base_steps * M**l)
+        return s1, s2, float(n * base_steps * M**lvl)
+
     return sampler

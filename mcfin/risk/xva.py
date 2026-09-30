@@ -21,16 +21,24 @@ Chaîne de calcul d'un desk XVA
    default » bilatérale.
 Hypothèse : indépendance crédit/marché (pas de wrong-way risk).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from itertools import pairwise
 
 import numpy as np
 
 from ..rates.hull_white import HullWhite, HWPaths
 
-__all__ = ["InterestRateSwap", "CSA", "Counterparty", "ExposureResult", "simulate_exposure",
-           "compute_xva"]
+__all__ = [
+    "CSA",
+    "Counterparty",
+    "ExposureResult",
+    "InterestRateSwap",
+    "compute_xva",
+    "simulate_exposure",
+]
 
 
 @dataclass
@@ -38,6 +46,7 @@ class InterestRateSwap:
     """Swap vanille mono-courbe : jambe fixe et variable de même échéancier.
 
     payer=True : la banque paie le fixe et reçoit le variable."""
+
     notional: float
     fixed_rate: float
     start: float
@@ -56,7 +65,7 @@ class InterestRateSwap:
         if t >= sched[-1] - 1e-12:
             return np.zeros_like(x)
         tau = np.diff(sched)
-        m = int(np.searchsorted(sched, t, side="right"))    # prochaine date > t
+        m = int(np.searchsorted(sched, t, side="right"))  # prochaine date > t
         if m == 0:  # swap non démarré
             float_leg = hw.bond(t, sched[0], x) - hw.bond(t, sched[-1], x)
             pays, taus = sched[1:], tau
@@ -65,7 +74,7 @@ class InterestRateSwap:
             L_fix = fixings[round(T_prev, 10)]
             P_m = hw.bond(t, T_m, x)
             float_leg = (tau[m - 1] * L_fix) * P_m + P_m - hw.bond(t, sched[-1], x)
-            pays, taus = sched[m:], tau[m - 1:]
+            pays, taus = sched[m:], tau[m - 1 :]
         P = hw.bond(t, pays[None, :], x[:, None])
         fixed_leg = self.fixed_rate * (P @ taus)
         v = float_leg - fixed_leg
@@ -74,9 +83,9 @@ class InterestRateSwap:
 
 @dataclass
 class CSA:
-    threshold_cpty: float = 0.0     # seuil au-delà duquel la contrepartie poste
-    threshold_bank: float = 0.0     # seuil au-delà duquel la banque poste
-    mpor: float = 10.0 / 252        # marge de risque (Margin Period of Risk)
+    threshold_cpty: float = 0.0  # seuil au-delà duquel la contrepartie poste
+    threshold_bank: float = 0.0  # seuil au-delà duquel la banque poste
+    mpor: float = 10.0 / 252  # marge de risque (Margin Period of Risk)
 
 
 @dataclass
@@ -95,9 +104,9 @@ class Counterparty:
 @dataclass
 class ExposureResult:
     times: np.ndarray
-    mtm: np.ndarray            # (n, nt) valeur du netting set
-    exposure: np.ndarray       # (n, nt) après collatéral
-    discount: np.ndarray       # (n, nt)
+    mtm: np.ndarray  # (n, nt) valeur du netting set
+    exposure: np.ndarray  # (n, nt) après collatéral
+    discount: np.ndarray  # (n, nt)
     ee: np.ndarray = field(default=None)
     ene: np.ndarray = field(default=None)
     pfe: np.ndarray = field(default=None)
@@ -105,9 +114,15 @@ class ExposureResult:
     eepe: float = 0.0
 
 
-def simulate_exposure(hw: HullWhite, trades: list[InterestRateSwap], exposure_times,
-                      n_paths: int = 20_000, seed: int = 0, csa: CSA | None = None,
-                      pfe_quantile: float = 0.95) -> ExposureResult:
+def simulate_exposure(
+    hw: HullWhite,
+    trades: list[InterestRateSwap],
+    exposure_times,
+    n_paths: int = 20_000,
+    seed: int = 0,
+    csa: CSA | None = None,
+    pfe_quantile: float = 0.95,
+) -> ExposureResult:
     t_exp = np.asarray(exposure_times, dtype=float)
     fix_dates = np.unique(np.concatenate([tr.schedule[:-1] for tr in trades]))
     grid = [t_exp, fix_dates]
@@ -123,20 +138,19 @@ def simulate_exposure(hw: HullWhite, trades: list[InterestRateSwap], exposure_ti
     for tr in trades:
         f = {}
         sched = tr.schedule
-        for T0, T1 in zip(sched[:-1], sched[1:]):
+        for T0, T1 in pairwise(sched):
             x0 = paths.x[:, paths.index(T0)] if T0 > 0 else np.zeros(n)
             f[round(T0, 10)] = (1 / hw.bond(T0, T1, x0) - 1) / (T1 - T0)
         fixings.append(f)
 
     def netting_value(t):
         x = paths.x[:, paths.index(t)] if t > 0 else np.zeros(n)
-        return sum(tr.value(hw, t, x, fx) for tr, fx in zip(trades, fixings))
+        return sum(tr.value(hw, t, x, fx) for tr, fx in zip(trades, fixings, strict=True))
 
     mtm = np.column_stack([netting_value(t) for t in t_exp])
     if csa is not None:
         lagged = np.column_stack([netting_value(max(t - csa.mpor, 0.0)) for t in t_exp])
-        coll = np.maximum(lagged - csa.threshold_cpty, 0.0) \
-            - np.maximum(-lagged - csa.threshold_bank, 0.0)
+        coll = np.maximum(lagged - csa.threshold_cpty, 0.0) - np.maximum(-lagged - csa.threshold_bank, 0.0)
         expo = mtm - coll
     else:
         expo = mtm
@@ -153,12 +167,17 @@ def simulate_exposure(hw: HullWhite, trades: list[InterestRateSwap], exposure_ti
     return ExposureResult(t_exp, mtm, expo, disc, ee, ene, pfe, epe, eepe)
 
 
-def compute_xva(res: ExposureResult, cpty: Counterparty, bank: Counterparty | None = None,
-                funding_spread: float = 0.0, first_to_default: bool = True) -> dict:
+def compute_xva(
+    res: ExposureResult,
+    cpty: Counterparty,
+    bank: Counterparty | None = None,
+    funding_spread: float = 0.0,
+    first_to_default: bool = True,
+) -> dict:
     t = res.times
     t_prev = np.concatenate(([0.0], t[:-1]))
-    dee = (res.discount * np.maximum(res.exposure, 0)).mean(axis=0)   # E[D E⁺]
-    dne = (res.discount * np.minimum(res.exposure, 0)).mean(axis=0)   # E[D E⁻] <= 0
+    dee = (res.discount * np.maximum(res.exposure, 0)).mean(axis=0)  # E[D E⁺]
+    dne = (res.discount * np.minimum(res.exposure, 0)).mean(axis=0)  # E[D E⁻] <= 0
     pd_c = cpty.survival(t_prev) - cpty.survival(t)
     s_b = bank.survival(t_prev) if (bank is not None and first_to_default) else 1.0
     cva = (1 - cpty.recovery) * np.sum(dee * pd_c * s_b)

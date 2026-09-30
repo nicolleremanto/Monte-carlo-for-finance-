@@ -8,6 +8,7 @@ Servent à valider les moteurs Monte Carlo et comme variables de contrôle :
 * asiatique géométrique discrète (Kemna & Vorst 1990) ;
 * lookback à strike flottant (Goldman, Sosin & Gatto 1979).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -15,15 +16,20 @@ from scipy.special import gammaln, ndtr, zeta
 
 from .black_scholes import bs_price, option_sign
 
-__all__ = ["merton_price", "barrier_price", "bgk_shift", "BGK_BETA",
-           "geometric_asian_price", "lookback_floating_price"]
+__all__ = [
+    "BGK_BETA",
+    "barrier_price",
+    "bgk_shift",
+    "geometric_asian_price",
+    "lookback_floating_price",
+    "merton_price",
+]
 
 #: β = -ζ(1/2)/sqrt(2π) ≈ 0.5826 (Broadie, Glasserman & Kou 1997)
 BGK_BETA = float(-zeta(0.5) / np.sqrt(2 * np.pi))
 
 
-def merton_price(S, K, T, r, sigma, lam, mu_j, sigma_j, q=0.0,
-                 option_type="call", n_terms: int = 120):
+def merton_price(S, K, T, r, sigma, lam, mu_j, sigma_j, q=0.0, option_type="call", n_terms: int = 120):
     """Merton jump-diffusion : ln(1+J) ~ N(μ_J, δ²), sauts Poisson(λ).
 
     C = Σ_n e^{-λ'T} (λ'T)^n / n! · BS(S, K, T, r_n, σ_n)
@@ -49,8 +55,7 @@ def bgk_shift(barrier, sigma, dt, direction: str):
     return barrier * np.exp(s * BGK_BETA * sigma * np.sqrt(dt))
 
 
-def barrier_price(S, K, H, T, r, sigma, q=0.0, option_type="call",
-                  barrier_type="down-and-out"):
+def barrier_price(S, K, H, T, r, sigma, q=0.0, option_type="call", barrier_type="down-and-out"):
     """Options barrières à surveillance continue, sans rebate.
 
     barrier_type ∈ {down-and-out, down-and-in, up-and-out, up-and-in}.
@@ -68,10 +73,12 @@ def barrier_price(S, K, H, T, r, sigma, q=0.0, option_type="call",
     dq, dr = np.exp((b - r) * T), np.exp(-r * T)
     A = phi * S * dq * ndtr(phi * x1) - phi * K * dr * ndtr(phi * x1 - phi * sT)
     B = phi * S * dq * ndtr(phi * x2) - phi * K * dr * ndtr(phi * x2 - phi * sT)
-    C = (phi * S * dq * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y1)
-         - phi * K * dr * (H / S) ** (2 * mu) * ndtr(eta * y1 - eta * sT))
-    D = (phi * S * dq * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y2)
-         - phi * K * dr * (H / S) ** (2 * mu) * ndtr(eta * y2 - eta * sT))
+    C = phi * S * dq * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y1) - phi * K * dr * (H / S) ** (2 * mu) * ndtr(
+        eta * y1 - eta * sT
+    )
+    D = phi * S * dq * (H / S) ** (2 * (mu + 1)) * ndtr(eta * y2) - phi * K * dr * (H / S) ** (2 * mu) * ndtr(
+        eta * y2 - eta * sT
+    )
     call = phi > 0
     kh = K > H
     table = {
@@ -129,8 +136,14 @@ def lookback_floating_price(S, T, r, sigma, q=0.0, option_type="call"):
     k = sigma**2 / (2 * b)
     dq, dr = np.exp(-q * T), np.exp(-r * T)
     if option_type == "call":
-        return float(S * dq * ndtr(a1) - S * dq * k * ndtr(-a1)
-                     - S * dr * (ndtr(a2) - k * ndtr(-a1 + 2 * b * np.sqrt(T) / sigma)))
+        return float(
+            S * dq * ndtr(a1)
+            - S * dq * k * ndtr(-a1)
+            - S * dr * (ndtr(a2) - k * ndtr(-a1 + 2 * b * np.sqrt(T) / sigma))
+        )
     # put : max(S) - S_T, avec b1 = (b + σ²/2)√T/σ
-    return float(S * dr * (ndtr(-a2) - k * ndtr(a1 - 2 * b * np.sqrt(T) / sigma))
-                 + S * dq * k * ndtr(a1) - S * dq * ndtr(-a1))
+    return float(
+        S * dr * (ndtr(-a2) - k * ndtr(a1 - 2 * b * np.sqrt(T) / sigma))
+        + S * dq * k * ndtr(a1)
+        - S * dq * ndtr(-a1)
+    )

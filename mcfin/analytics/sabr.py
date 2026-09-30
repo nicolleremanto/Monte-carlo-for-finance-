@@ -10,6 +10,7 @@ Volatilité implicite lognormale (Black) :
                     + (2-3ρ²)/24 ν²) T]
     z = ν/α (FK)^{(1-β)/2} ln(F/K),  x(z) = ln[(sqrt(1-2ρz+z²) + z - ρ)/(1-ρ)]
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -27,7 +28,13 @@ def sabr_hagan_vol(F, K, T, alpha, beta, rho, nu):
     with np.errstate(divide="ignore", invalid="ignore"):
         xz = np.log((np.sqrt(1 - 2 * rho * z + z * z) + z - rho) / (1 - rho))
         zx = np.where(np.abs(z) < 1e-8, 1.0 - 0.5 * rho * z, z / xz)
-    corr = 1 + ((1 - beta) ** 2 / 24 * alpha**2 / fk**2
-                + rho * beta * nu * alpha / (4 * fk)
-                + (2 - 3 * rho**2) / 24 * nu**2) * T
+    corr = (
+        1
+        + (
+            (1 - beta) ** 2 / 24 * alpha**2 / fk**2
+            + rho * beta * nu * alpha / (4 * fk)
+            + (2 - 3 * rho**2) / 24 * nu**2
+        )
+        * T
+    )
     return alpha / denom * zx * corr

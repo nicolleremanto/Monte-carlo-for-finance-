@@ -14,22 +14,23 @@ Méthodologie (risque de marché, FRTB)
 * Intervalles de confiance par bootstrap ; contributions d'Euler à l'ES
   (ES = Σ_i -E[P&L_i | queue], allocation additive exacte par homogénéité).
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from ..analytics.black_scholes import bs_greeks, bs_price
 
-__all__ = ["OptionPosition", "OptionBook", "var_es", "simulate_pnl"]
+__all__ = ["OptionBook", "OptionPosition", "simulate_pnl", "var_es"]
 
 
 @dataclass
 class OptionPosition:
     asset: int
     quantity: float
-    strike: float | None = None   # None => position en sous-jacent (action)
+    strike: float | None = None  # None => position en sous-jacent (action)
     maturity: float = 1.0
     option_type: str = "call"
     implied_vol: float = 0.2
@@ -38,10 +39,10 @@ class OptionPosition:
 @dataclass
 class OptionBook:
     spots: np.ndarray
-    vols: np.ndarray               # volatilités historiques des spots (annualisées)
+    vols: np.ndarray  # volatilités historiques des spots (annualisées)
     corr: np.ndarray
     rate: float = 0.0
-    positions: list = None
+    positions: list[OptionPosition] = field(default_factory=list)
 
     def value(self, spots: np.ndarray, vol_mult: np.ndarray | float = 1.0, dt: float = 0.0):
         """Valeur de chaque position pour des spots (n, d) : renvoie (n, n_pos)."""
@@ -53,9 +54,18 @@ class OptionBook:
             if p.strike is None:
                 out.append(p.quantity * s)
             else:
-                out.append(p.quantity * bs_price(s, p.strike, max(p.maturity - dt, 1e-8),
-                                                 self.rate, p.implied_vol * vm[:, p.asset],
-                                                 0.0, p.option_type))
+                out.append(
+                    p.quantity
+                    * bs_price(
+                        s,
+                        p.strike,
+                        max(p.maturity - dt, 1e-8),
+                        self.rate,
+                        p.implied_vol * vm[:, p.asset],
+                        0.0,
+                        p.option_type,
+                    )
+                )
         return np.column_stack(out)
 
     def greeks(self):
@@ -67,8 +77,9 @@ class OptionBook:
             if p.strike is None:
                 delta[p.asset] += p.quantity
                 continue
-            g = bs_greeks(self.spots[p.asset], p.strike, p.maturity, self.rate,
-                          p.implied_vol, 0.0, p.option_type)
+            g = bs_greeks(
+                self.spots[p.asset], p.strike, p.maturity, self.rate, p.implied_vol, 0.0, p.option_type
+            )
             delta[p.asset] += p.quantity * g["delta"]
             gamma[p.asset] += p.quantity * g["gamma"]
             vega[p.asset] += p.quantity * g["vega"] * p.implied_vol
@@ -76,9 +87,17 @@ class OptionBook:
         return delta, gamma, vega, theta
 
 
-def simulate_pnl(book: OptionBook, horizon: float = 10 / 252, n_scenarios: int = 100_000,
-                 dist: str = "student", dof: float = 4.0, vol_of_vol: float = 0.0,
-                 spot_vol_corr: float = -0.5, method: str = "full", seed: int = 0):
+def simulate_pnl(
+    book: OptionBook,
+    horizon: float = 10 / 252,
+    n_scenarios: int = 100_000,
+    dist: str = "student",
+    dof: float = 4.0,
+    vol_of_vol: float = 0.0,
+    spot_vol_corr: float = -0.5,
+    method: str = "full",
+    seed: int = 0,
+):
     """Scénarios de P&L par position (n, n_pos) ; method ∈ {full, delta, delta-gamma}."""
     rng = np.random.default_rng(seed)
     d = book.spots.size
@@ -104,18 +123,19 @@ def simulate_pnl(book: OptionBook, horizon: float = 10 / 252, n_scenarios: int =
         if p.strike is None:
             cols.append(p.quantity * ds[:, p.asset])
             continue
-        g = bs_greeks(book.spots[p.asset], p.strike, p.maturity, book.rate, p.implied_vol,
-                      0.0, p.option_type)
-        pnl = g["delta"] * ds[:, p.asset] + g["theta"] * horizon \
-            + g["vega"] * p.implied_vol * dvol[:, p.asset]
+        g = bs_greeks(book.spots[p.asset], p.strike, p.maturity, book.rate, p.implied_vol, 0.0, p.option_type)
+        pnl = (
+            g["delta"] * ds[:, p.asset] + g["theta"] * horizon + g["vega"] * p.implied_vol * dvol[:, p.asset]
+        )
         if method == "delta-gamma":
             pnl = pnl + 0.5 * g["gamma"] * ds[:, p.asset] ** 2
         cols.append(p.quantity * pnl)
     return np.column_stack(cols)
 
 
-def var_es(pnl: np.ndarray, alpha_var: float = 0.99, alpha_es: float = 0.975,
-           n_bootstrap: int = 200, seed: int = 0) -> dict:
+def var_es(
+    pnl: np.ndarray, alpha_var: float = 0.99, alpha_es: float = 0.975, n_bootstrap: int = 200, seed: int = 0
+) -> dict:
     """VaR, ES, IC bootstrap à 95 % et contributions d'Euler à l'ES.
 
     ``pnl`` : (n,) P&L total ou (n, n_pos) P&L par position.
@@ -132,13 +152,13 @@ def var_es(pnl: np.ndarray, alpha_var: float = 0.99, alpha_es: float = 0.975,
 
     var, es = risk(total)
     rng = np.random.default_rng(seed)
-    boot = np.array([risk(total[rng.integers(0, total.size, total.size)])
-                     for _ in range(n_bootstrap)])
+    boot = np.array([risk(total[rng.integers(0, total.size, total.size)]) for _ in range(n_bootstrap)])
     q = np.quantile(total, 1 - alpha_es)
     tail = total <= q
     contrib = -per_pos[tail].mean(axis=0)
     return {
-        "VaR": float(var), "ES": float(es),
+        "VaR": float(var),
+        "ES": float(es),
         "VaR_CI95": tuple(np.quantile(boot[:, 0], [0.025, 0.975])),
         "ES_CI95": tuple(np.quantile(boot[:, 1], [0.025, 0.975])),
         "ES_contributions": contrib,

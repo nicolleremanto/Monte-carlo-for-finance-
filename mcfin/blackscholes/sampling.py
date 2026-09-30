@@ -22,18 +22,32 @@ partir d'uniformes seules, pour pouvoir les comparer et les tester :
    Illustration du principe acceptation-rejet : on accepte X ~ g avec
    probabilité f(X)/(M g(X)) = exp(-(|X| - 1)²/2).
 """
+
 from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["inverse_normal_bsm", "box_muller", "marsaglia_polar", "rejection_laplace",
-           "REJECTION_CONSTANT"]
+__all__ = [
+    "REJECTION_CONSTANT",
+    "box_muller",
+    "inverse_normal_bsm",
+    "marsaglia_polar",
+    "rejection_laplace",
+]
 
 _A = (2.50662823884, -18.61500062529, 41.39119773534, -25.44106049637)
 _B = (-8.47351093090, 23.08336743743, -21.06224101826, 3.13082909833)
-_C = (0.3374754822726147, 0.9761690190917186, 0.1607979714918209, 0.0276438810333863,
-      0.0038405729373609, 0.0003951896511919, 0.0000321767881768, 0.0000002888167364,
-      0.0000003960315187)
+_C = (
+    0.3374754822726147,
+    0.9761690190917186,
+    0.1607979714918209,
+    0.0276438810333863,
+    0.0038405729373609,
+    0.0003951896511919,
+    0.0000321767881768,
+    0.0000002888167364,
+    0.0000003960315187,
+)
 
 #: constante M = sup f/g du rejet gaussien depuis Laplace
 REJECTION_CONSTANT = float(np.sqrt(2 * np.e / np.pi))
@@ -63,7 +77,7 @@ def inverse_normal_bsm(u) -> np.ndarray:
 
 def box_muller(n: int, rng: np.random.Generator) -> np.ndarray:
     m = (n + 1) // 2
-    u1 = 1.0 - rng.random(m)          # dans (0, 1] : log fini
+    u1 = 1.0 - rng.random(m)  # dans (0, 1] : log fini
     u2 = rng.random(m)
     r = np.sqrt(-2.0 * np.log(u1))
     theta = 2.0 * np.pi * u2
@@ -91,8 +105,8 @@ def rejection_laplace(n: int, rng: np.random.Generator) -> tuple[np.ndarray, flo
     out, drawn, got = [], 0, 0
     while got < n:
         m = int(1.4 * (n - got)) + 16
-        e = -np.log(1.0 - rng.random(m))                 # Exp(1)
-        x = np.where(rng.random(m) < 0.5, -e, e)         # Laplace(0, 1)
+        e = -np.log(1.0 - rng.random(m))  # Exp(1)
+        x = np.where(rng.random(m) < 0.5, -e, e)  # Laplace(0, 1)
         accept = rng.random(m) <= np.exp(-0.5 * (np.abs(x) - 1.0) ** 2)
         drawn += m
         out.append(x[accept])

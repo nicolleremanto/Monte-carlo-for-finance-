@@ -28,6 +28,7 @@ de Nadaraya-Watson :
 avec un noyau gaussien de fenêtre h = 1.5 σ_loc(t, S0) sqrt(max(t, 1/4)) N^{-1/5}
 (en log-spot). Une seule simulation calibre toute la fonction de levier.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -41,12 +42,13 @@ from ..market.curves import Curve
 from ..market.volsurface import ImpliedVolSurface
 from .base import Model
 
-__all__ = ["LocalVol", "LeverageFunction", "LocalStochasticVol"]
+__all__ = ["LeverageFunction", "LocalStochasticVol", "LocalVol"]
 
 
 @dataclass
 class LocalVol(Model):
     """Volatilité locale ; schéma log-Euler (exactement martingale à chaque pas)."""
+
     spot: float = 100.0
     surface: ImpliedVolSurface | None = None
     rate: float | Curve = 0.0
@@ -57,6 +59,8 @@ class LocalVol(Model):
 
     def local_vol(self, t: float, s: np.ndarray) -> np.ndarray:
         y = np.log(s / self.forward(t))
+        if self.surface is None:
+            raise ValueError("LocalVol : nappe de volatilité implicite requise")
         return np.sqrt(self.surface.local_variance(y, max(t, self.t_min)))
 
     def simulate(self, grid: TimeGrid, z: np.ndarray, rng=None) -> Paths:
@@ -80,27 +84,32 @@ class LocalVol(Model):
                 j = obs[i + 1]
                 spot[:, j], iv[:, j - 1] = s, acc
                 acc = np.zeros(n)
-        return Paths(times=np.concatenate(([0.0], grid.obs_times)), spot=spot,
-                     discount=self._deterministic_discount(grid), int_var=iv)
+        return Paths(
+            times=np.concatenate(([0.0], grid.obs_times)),
+            spot=spot,
+            discount=self._deterministic_discount(grid),
+            int_var=iv,
+        )
 
 
 @dataclass
 class LeverageFunction:
     """L(t, y) tabulée : temps (n_t,), grilles de log-moneyness (n_t, M), valeurs (n_t, M).
     Interpolation linéaire en y (plate hors grille), constante par morceaux en t."""
+
     times: np.ndarray
     y_grid: np.ndarray
     values: np.ndarray
 
     def __call__(self, t: float, y: np.ndarray) -> np.ndarray:
-        k = int(np.clip(np.searchsorted(self.times, t + 1e-12, side="right") - 1,
-                        0, self.times.size - 1))
+        k = int(np.clip(np.searchsorted(self.times, t + 1e-12, side="right") - 1, 0, self.times.size - 1))
         return np.interp(y, self.y_grid[k], self.values[k])
 
 
 @dataclass
 class LocalStochasticVol(Model):
     """Heston local (LSV) calibré par méthode particulaire."""
+
     spot: float = 100.0
     surface: ImpliedVolSurface | None = None
     v0: float = 0.04
@@ -116,16 +125,24 @@ class LocalStochasticVol(Model):
 
     # ------------------------------------------------------------------
     def _loc_var(self, t, y):
+        if self.surface is None:
+            raise ValueError("LSV : nappe de volatilité implicite requise")
         return self.surface.local_variance(y, max(t, 1e-3))
 
-    def calibrate(self, horizon: float, n_particles: int = 50_000, n_grid: int = 41,
-                  bandwidth_scale: float = 1.5, seed: int | None = 0,
-                  chunk: int = 20_000) -> "LocalStochasticVol":
+    def calibrate(
+        self,
+        horizon: float,
+        n_particles: int = 50_000,
+        n_grid: int = 41,
+        bandwidth_scale: float = 1.5,
+        seed: int | None = 0,
+        chunk: int = 20_000,
+    ) -> LocalStochasticVol:
         """Calibre la fonction de levier jusqu'à ``horizon`` ; renvoie un nouveau modèle."""
         rng = np.random.default_rng(seed)
         grid = TimeGrid.build([horizon], self.dt)
         times, dts = grid.times, grid.dt
-        y = np.zeros(n_particles)           # ln(S/F_t) : martingale exponentielle
+        y = np.zeros(n_particles)  # ln(S/F_t) : martingale exponentielle
         v = np.full(n_particles, self.v0)
         L_times, L_grids, L_vals = [], [], []
         rc = np.sqrt(1 - self.rho**2)
@@ -143,8 +160,8 @@ class LocalStochasticVol(Model):
                 den = np.zeros(n_grid)
                 vp = np.maximum(v, 0.0)
                 for c in range(0, n_particles, chunk):
-                    ker = np.exp(-0.5 * ((y[c:c + chunk, None] - yg[None, :]) / h) ** 2)
-                    num += vp[c:c + chunk] @ ker
+                    ker = np.exp(-0.5 * ((y[c : c + chunk, None] - yg[None, :]) / h) ** 2)
+                    num += vp[c : c + chunk] @ ker
                     den += ker.sum(axis=0)
                 cond_v = np.maximum(num / np.maximum(den, 1e-300), 1e-6)
                 lev = np.sqrt(self._loc_var(t, yg) / cond_v)
@@ -192,5 +209,10 @@ class LocalStochasticVol(Model):
                 var[:, j] = np.maximum(v, 0.0)
                 iv[:, j - 1] = acc
                 acc = np.zeros(n)
-        return Paths(times=np.concatenate(([0.0], grid.obs_times)), spot=spot,
-                     discount=self._deterministic_discount(grid), int_var=iv, variance=var)
+        return Paths(
+            times=np.concatenate(([0.0], grid.obs_times)),
+            spot=spot,
+            discount=self._deterministic_discount(grid),
+            int_var=iv,
+            variance=var,
+        )

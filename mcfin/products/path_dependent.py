@@ -17,6 +17,7 @@ variance plus faible). Pour les modèles à volatilité locale/stochastique,
 IV est la variance intégrée simulée sur l'intervalle (approximation
 standard).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,9 +26,9 @@ import numpy as np
 
 from ..analytics.black_scholes import option_sign
 from ..core.results import Paths
-from .base import Product, time_index
+from .base import Product, time_indices
 
-__all__ = ["AsianOption", "BarrierOption", "LookbackOption", "Cliquet", "VarianceSwap"]
+__all__ = ["AsianOption", "BarrierOption", "Cliquet", "LookbackOption", "VarianceSwap"]
 
 
 @dataclass
@@ -37,6 +38,7 @@ class AsianOption(Product):
     strike_type="fixed"   : (ω(A - K))^+
     strike_type="floating": (ω(S_T - A))^+
     """
+
     strike: float
     fixing_times: np.ndarray
     option_type: str = "call"
@@ -52,7 +54,7 @@ class AsianOption(Product):
         return float(np.max(self.fixing_times))
 
     def average_of(self, paths: Paths) -> np.ndarray:
-        idx = time_index(paths, self.fixing_times)
+        idx = time_indices(paths, self.fixing_times)
         s = paths.spot[:, idx]
         return np.exp(np.log(s).mean(axis=1)) if self.average == "geometric" else s.mean(axis=1)
 
@@ -70,6 +72,7 @@ class BarrierOption(Product):
     monitoring="discrete"  : barrière observée uniquement aux dates données ;
     monitoring="continuous": correction de pont brownien entre les dates.
     """
+
     strike: float
     barrier: float
     maturity: float
@@ -114,6 +117,7 @@ class LookbackOption(Product):
     surveillance discrète. ``bgk_correction`` applique le décalage de
     Broadie-Glasserman-Kou pour approcher la surveillance continue :
     min_c ≈ min_d · e^{-β σ sqrt(Δt)}, max_c ≈ max_d · e^{+β σ sqrt(Δt)}."""
+
     maturity: float
     option_type: str = "call"
     n_monitoring: int = 252
@@ -125,6 +129,7 @@ class LookbackOption(Product):
 
     def payoff(self, paths: Paths) -> np.ndarray:
         from ..analytics.exotics import BGK_BETA
+
         s = paths.spot
         shift = 1.0
         if self.bgk_sigma is not None:
@@ -145,6 +150,7 @@ class Cliquet(Product):
     Très sensible au smile *forward* : LV et LSV calibrés aux mêmes vanilles
     donnent des prix différents (test de la dynamique du smile).
     """
+
     reset_times: np.ndarray
     local_floor: float = -0.05
     local_cap: float = 0.05
@@ -157,7 +163,7 @@ class Cliquet(Product):
         return np.asarray(self.reset_times, dtype=float)
 
     def payoff(self, paths: Paths) -> np.ndarray:
-        idx = np.concatenate(([0], time_index(paths, self.reset_times)))
+        idx = np.concatenate(([0], time_indices(paths, self.reset_times)))
         s = paths.spot[:, idx]
         ret = s[:, 1:] / s[:, :-1] - 1.0
         total = np.clip(ret, self.local_floor, self.local_cap).sum(axis=1)
@@ -171,6 +177,7 @@ class VarianceSwap(Product):
     σ²_réalisée = (A/n) Σ ln²(S_i/S_{i-1}), A = 252 (annualisation).
     Avec strike nul, le prix actualisé / D(0,T) donne le strike équitable.
     """
+
     maturity: float
     strike_var: float = 0.0
     notional: float = 1.0
@@ -178,7 +185,7 @@ class VarianceSwap(Product):
 
     @property
     def observation_times(self):
-        n = self.n_fixings or int(round(252 * self.maturity))
+        n = self.n_fixings or int(np.rint(252 * self.maturity))
         return self.maturity * np.arange(1, n + 1) / n
 
     def payoff(self, paths: Paths) -> np.ndarray:

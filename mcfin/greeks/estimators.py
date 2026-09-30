@@ -18,6 +18,7 @@
        gamma : (z_1² - 1)/(S_0² σ² Δt_1) - z_1/(S_0² σ sqrt(Δt_1))
        vega  : Σ_i [ (z_i² - 1)/σ - z_i sqrt(Δt_i) ]
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -27,11 +28,12 @@ from ..core.rng import GaussianGenerator
 from ..models.equity import BlackScholes
 from . import aad
 
-__all__ = ["likelihood_ratio_greeks", "gbm_path_pricer", "heston_pricer"]
+__all__ = ["gbm_path_pricer", "heston_pricer", "likelihood_ratio_greeks"]
 
 
-def likelihood_ratio_greeks(model: BlackScholes, product, n_paths: int = 200_000,
-                            seed: int = 0, max_dt: float | None = None) -> dict:
+def likelihood_ratio_greeks(
+    model: BlackScholes, product, n_paths: int = 200_000, seed: int = 0, max_dt: float | None = None
+) -> dict:
     """Delta, gamma, vega par LRM pour tout produit mono-sous-jacent sous GBM."""
     if model.n_assets != 1:
         raise ValueError("LRM implémenté pour un seul sous-jacent")
@@ -75,6 +77,7 @@ def gbm_path_pricer(product_payoff, fixing_times, maturity: float):
             spots.append(s0 * aad.exp(x))
         pay = product_payoff(spots, aad)
         return aad.mean(pay) * aad.exp(-r * maturity)
+
     return pricer
 
 
@@ -99,4 +102,5 @@ def heston_pricer(strike: float, maturity: float, n_steps: int, option_type="cal
         st = s0 * aad.exp(x)
         pay = aad.maximum(w * (st - strike), 0.0)
         return aad.mean(pay) * aad.exp(-r * maturity)
+
     return pricer

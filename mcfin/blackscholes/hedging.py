@@ -28,6 +28,7 @@ illustre les résultats théoriques suivants.
    en moyenne les frais en utilisant la volatilité modifiée
        σ_L² = σ² (1 + sqrt(2/π) · k / (σ sqrt(Δt))).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -36,16 +37,20 @@ import numpy as np
 
 from ..analytics.black_scholes import bs_greeks, bs_price
 
-__all__ = ["HedgeResult", "simulate_delta_hedge", "leland_volatility",
-           "kamal_derman_std"]
+__all__ = [
+    "HedgeResult",
+    "kamal_derman_std",
+    "leland_volatility",
+    "simulate_delta_hedge",
+]
 
 
 @dataclass
 class HedgeResult:
-    pnl: np.ndarray               # P&L final (en T) par trajectoire
+    pnl: np.ndarray  # P&L final (en T) par trajectoire
     premium: float
-    gamma_pnl: np.ndarray         # ½∫ e^{r(T-t)} Γ S² (σ_h² - σ_r²) dt discrétisé
-    costs: np.ndarray             # frais de transaction cumulés (capitalisés)
+    gamma_pnl: np.ndarray  # ½∫ e^{r(T-t)} Γ S² (σ_h² - σ_r²) dt discrétisé
+    costs: np.ndarray  # frais de transaction cumulés (capitalisés)
     n_rebalancing: int
 
     @property
@@ -67,12 +72,23 @@ def kamal_derman_std(S0, K, T, r, sigma, n_rebalancing, q=0.0) -> float:
     return float(np.sqrt(np.pi / 4) * vega * sigma / np.sqrt(n_rebalancing) * np.exp(r * T))
 
 
-def simulate_delta_hedge(S0: float, K: float, T: float, r: float, sigma_real: float,
-                         sigma_implied: float, mu: float = 0.05, q: float = 0.0,
-                         sigma_hedge: float | None = None, n_rebalancing: int = 52,
-                         n_paths: int = 10_000, option_type: str = "call",
-                         cost: float = 0.0, setup_costs: bool = True,
-                         seed: int | None = 0) -> HedgeResult:
+def simulate_delta_hedge(
+    S0: float,
+    K: float,
+    T: float,
+    r: float,
+    sigma_real: float,
+    sigma_implied: float,
+    mu: float = 0.05,
+    q: float = 0.0,
+    sigma_hedge: float | None = None,
+    n_rebalancing: int = 52,
+    n_paths: int = 10_000,
+    option_type: str = "call",
+    cost: float = 0.0,
+    setup_costs: bool = True,
+    seed: int | None = 0,
+) -> HedgeResult:
     """Vendeur d'une option, couvert en delta à n dates équiréparties.
 
     ``cost`` : fourchette relative aller-retour k (frais (k/2)|ΔΔ|S).
@@ -101,8 +117,9 @@ def simulate_delta_hedge(S0: float, K: float, T: float, r: float, sigma_real: fl
         fee = 0.5 * cost * np.abs(trade) * S[:, k] if (k > 0 or setup_costs) else 0.0 * trade
         cash -= trade * S[:, k] + fee
         costs = costs * np.exp(r * dt) + fee
-        gamma_pnl += 0.5 * np.exp(r * (T - k * dt)) * g["gamma"] * S[:, k] ** 2 \
-            * (sigma_h**2 - sigma_real**2) * dt
+        gamma_pnl += (
+            0.5 * np.exp(r * (T - k * dt)) * g["gamma"] * S[:, k] ** 2 * (sigma_h**2 - sigma_real**2) * dt
+        )
         # capitalisation du cash et dividendes reçus sur la position
         cash = cash * np.exp(r * dt)
         cash += delta * S[:, k + 1] * (np.exp(q * dt) - 1.0)
@@ -111,5 +128,6 @@ def simulate_delta_hedge(S0: float, K: float, T: float, r: float, sigma_real: fl
     payoff = np.maximum((1 if option_type == "call" else -1) * (ST - K), 0.0)
     unwind_fee = 0.5 * cost * np.abs(delta_prev) * ST * float(setup_costs)
     pnl = cash + delta_prev * ST - unwind_fee - payoff
-    return HedgeResult(pnl=pnl, premium=premium, gamma_pnl=gamma_pnl,
-                       costs=costs + unwind_fee, n_rebalancing=n_rebalancing)
+    return HedgeResult(
+        pnl=pnl, premium=premium, gamma_pnl=gamma_pnl, costs=costs + unwind_fee, n_rebalancing=n_rebalancing
+    )

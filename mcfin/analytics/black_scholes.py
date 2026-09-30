@@ -3,14 +3,23 @@
 Toutes les fonctions sont vectorisées (broadcasting numpy). Le type d'option
 est "call"/"put" (ou +1/-1).
 """
+
 from __future__ import annotations
 
 import numpy as np
 from scipy.special import ndtr
 
-__all__ = ["option_sign", "black_price", "bs_price", "bs_greeks",
-           "bs_digital_price", "bachelier_price", "black_implied_vol",
-           "implied_vol", "bachelier_implied_vol"]
+__all__ = [
+    "bachelier_implied_vol",
+    "bachelier_price",
+    "black_implied_vol",
+    "black_price",
+    "bs_digital_price",
+    "bs_greeks",
+    "bs_price",
+    "implied_vol",
+    "option_sign",
+]
 
 _SQRT_2PI = np.sqrt(2.0 * np.pi)
 
@@ -88,8 +97,7 @@ def bs_greeks(S, K, T, r, sigma, q=0.0, option_type="call") -> dict:
     delta = w * dq * ndtr(w * d1)
     gamma = dq * pdf1 / (S * sT)
     vega = S * dq * pdf1 * sqT
-    theta = (-S * dq * pdf1 * sigma / (2 * sqT)
-             + w * q * S * dq * ndtr(w * d1) - w * r * K * dr * ndtr(w * d2))
+    theta = -S * dq * pdf1 * sigma / (2 * sqT) + w * q * S * dq * ndtr(w * d1) - w * r * K * dr * ndtr(w * d2)
     rho = w * K * T * dr * ndtr(w * d2)
     epsilon = -w * S * T * dq * ndtr(w * d1)
     vanna = -dq * pdf1 * d2 / sigma
@@ -103,11 +111,24 @@ def bs_greeks(S, K, T, r, sigma, q=0.0, option_type="call") -> dict:
     ultima = -vega / sigma**2 * (d1 * d2 * (1 - d1 * d2) + d1**2 + d2**2)
     dual_delta = -w * dr * ndtr(w * d2)
     dual_gamma = dr * pdf2 / (K * sT)
-    return {"price": bs_price(S, K, T, r, sigma, q, option_type), "delta": delta,
-            "gamma": gamma, "vega": vega, "theta": theta, "rho": rho, "epsilon": epsilon,
-            "vanna": vanna, "volga": volga, "charm": charm, "speed": speed, "zomma": zomma,
-            "color": color, "ultima": ultima, "dual_delta": dual_delta,
-            "dual_gamma": dual_gamma}
+    return {
+        "price": bs_price(S, K, T, r, sigma, q, option_type),
+        "delta": delta,
+        "gamma": gamma,
+        "vega": vega,
+        "theta": theta,
+        "rho": rho,
+        "epsilon": epsilon,
+        "vanna": vanna,
+        "volga": volga,
+        "charm": charm,
+        "speed": speed,
+        "zomma": zomma,
+        "color": color,
+        "ultima": ultima,
+        "dual_delta": dual_delta,
+        "dual_gamma": dual_gamma,
+    }
 
 
 def bs_digital_price(S, K, T, r, sigma, q=0.0, option_type="call"):
@@ -129,8 +150,7 @@ def bachelier_price(F, K, T, df, sigma_n, option_type="call"):
     return df * np.where(s > 0, val, np.maximum(w * (F - K), 0.0))
 
 
-def black_implied_vol(price, F, K, T, df=1.0, option_type="call",
-                      tol: float = 1e-12, max_iter: int = 100):
+def black_implied_vol(price, F, K, T, df=1.0, option_type="call", tol: float = 1e-12, max_iter: int = 100):
     """Volatilité implicite Black-76, vectorisée.
 
     Newton sur s = σ√T, sécurisé par un encadrement [lo, hi] (bissection si le
@@ -139,8 +159,7 @@ def black_implied_vol(price, F, K, T, df=1.0, option_type="call",
     monotone (Jäckel, « By implication », 2006). Renvoie NaN si le prix viole
     les bornes d'arbitrage.
     """
-    price, F, K, T, df = np.broadcast_arrays(*(np.asarray(a, dtype=float)
-                                               for a in (price, F, K, T, df)))
+    price, F, K, T, df = np.broadcast_arrays(*(np.asarray(a, dtype=float) for a in (price, F, K, T, df)))
     w = np.broadcast_to(option_sign(option_type), price.shape)
     # On inverse toujours l'option hors de la monnaie (valeur temps pure) :
     # parité call-put pour convertir, puis tolérance relative sur ce prix.
@@ -176,12 +195,12 @@ def black_implied_vol(price, F, K, T, df=1.0, option_type="call",
 def implied_vol(price, S, K, T, r, q=0.0, option_type="call", **kw):
     """Volatilité implicite Black-Scholes (spot, taux et dividende continus)."""
     S, T, r, q = map(lambda a: np.asarray(a, dtype=float), (S, T, r, q))
-    return black_implied_vol(price, S * np.exp((r - q) * T), K, T,
-                             np.exp(-r * T), option_type, **kw)
+    return black_implied_vol(price, S * np.exp((r - q) * T), K, T, np.exp(-r * T), option_type, **kw)
 
 
 def bachelier_implied_vol(price, F, K, T, df=1.0, option_type="call"):
     """Volatilité normale implicite (inversion par Brent, scalaire)."""
     from scipy.optimize import brentq
+
     f = lambda s: float(bachelier_price(F, K, T, df, s, option_type)) - price
     return brentq(f, 1e-10, 1.0)

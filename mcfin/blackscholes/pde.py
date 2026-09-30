@@ -26,6 +26,7 @@ Discrétisation
   « projetée », exacte lorsque la région d'exercice est connexe et du bon
   côté de la grille (put : S petit ; call avec dividende : S grand).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ class PDEResult:
     theta: float
     spots: np.ndarray
     values: np.ndarray
-    exercise_boundary: np.ndarray | None = None   # frontière d'exercice S*(τ) (américain)
+    exercise_boundary: np.ndarray | None = None  # frontière d'exercice S*(τ) (américain)
 
 
 def _thomas(a, b, c, d):
@@ -102,10 +103,22 @@ def _cell_average_payoff(x: np.ndarray, dx: float, K: float, w: float) -> np.nda
     return integral / dx
 
 
-def bs_pde_price(S0: float, K: float, T: float, r: float, sigma: float, q: float = 0.0,
-                 option_type: str = "call", american: bool = False, n_space: int = 400,
-                 n_time: int = 200, n_std: float = 6.0, theta: float = 0.5,
-                 rannacher_steps: int = 4, smooth_payoff: bool = True) -> PDEResult:
+def bs_pde_price(
+    S0: float,
+    K: float,
+    T: float,
+    r: float,
+    sigma: float,
+    q: float = 0.0,
+    option_type: str = "call",
+    american: bool = False,
+    n_space: int = 400,
+    n_time: int = 200,
+    n_std: float = 6.0,
+    theta: float = 0.5,
+    rannacher_steps: int = 4,
+    smooth_payoff: bool = True,
+) -> PDEResult:
     """Prix, delta, gamma et theta par Crank-Nicolson (+ Rannacher)."""
     w = option_sign(option_type)
     half = n_std * sigma * np.sqrt(T)
@@ -137,8 +150,7 @@ def bs_pde_price(S0: float, K: float, T: float, r: float, sigma: float, q: float
 
     # pas de temps : Rannacher (demi-pas implicites) puis Crank-Nicolson
     dt_full = T / n_time
-    steps = [(dt_full / 2, 1.0)] * (2 * rannacher_steps) + \
-        [(dt_full, theta)] * (n_time - rannacher_steps)
+    steps = [(dt_full / 2, 1.0)] * (2 * rannacher_steps) + [(dt_full, theta)] * (n_time - rannacher_steps)
     V = V0.copy()
     tau = 0.0
     boundary_path = []

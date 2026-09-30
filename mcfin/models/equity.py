@@ -14,6 +14,7 @@ Schémas de discrétisation
       le meilleur des schémas d'Euler biaisés pour la CIR.
 * SABR : α lognormal exact, F par Euler absorbé en 0 (β < 1).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,7 +28,7 @@ from ..core.timegrid import TimeGrid
 from ..market.curves import Curve
 from .base import Model
 
-__all__ = ["BlackScholes", "MertonJumpDiffusion", "Heston", "SABR"]
+__all__ = ["SABR", "BlackScholes", "Heston", "MertonJumpDiffusion"]
 
 
 def _obs_mask(grid: TimeGrid) -> np.ndarray:
@@ -42,6 +43,7 @@ class BlackScholes(Model):
 
     dS_i/S_i = (r - q_i) dt + σ_i dW_i,  d<W_i, W_j> = ρ_ij dt
     """
+
     spot: float | np.ndarray = 100.0
     vol: float | np.ndarray = 0.2
     rate: float | Curve = 0.0
@@ -79,7 +81,7 @@ class BlackScholes(Model):
         np.cumsum(incr, axis=1, out=incr)
         spot = np.empty((n, grid.obs_idx.size + 1, d))
         spot[:, 0] = s0
-        if grid.obs_idx.size == grid.n_steps:   # toutes les dates observées : pas de copie
+        if grid.obs_idx.size == grid.n_steps:  # toutes les dates observées : pas de copie
             logs = incr
         else:
             logs = np.take(incr, grid.obs_idx - 1, axis=1)
@@ -87,17 +89,18 @@ class BlackScholes(Model):
         np.exp(logs, out=spot[:, 1:])
         t_all = np.concatenate(([0.0], grid.obs_times))
         # variance intégrée déterministe : vue diffusée (aucune copie)
-        iv = np.broadcast_to((vol**2)[None, None, :] * np.diff(t_all)[None, :, None],
-                             (n, t_all.size - 1, self.n_assets))
+        iv = np.broadcast_to(
+            (vol**2)[None, None, :] * np.diff(t_all)[None, :, None], (n, t_all.size - 1, self.n_assets)
+        )
         if self.n_assets == 1:
             spot, iv = spot[..., 0], iv[..., 0]
-        return Paths(times=t_all, spot=spot, discount=self._deterministic_discount(grid),
-                     int_var=iv)
+        return Paths(times=t_all, spot=spot, discount=self._deterministic_discount(grid), int_var=iv)
 
 
 @dataclass
 class MertonJumpDiffusion(Model):
     """dS/S = (r - q - λk̄) dt + σ dW + (J - 1) dN,  ln J ~ N(μ_J, δ²)."""
+
     spot: float = 100.0
     vol: float = 0.2
     lam: float = 0.5
@@ -113,15 +116,23 @@ class MertonJumpDiffusion(Model):
         kbar = np.exp(self.mu_j + 0.5 * self.sigma_j**2) - 1.0
         n_jumps = poisson_inverse(ndtr(z[:, :, 1]), self.lam * dt[None, :])
         jumps = n_jumps * self.mu_j + np.sqrt(n_jumps) * self.sigma_j * z[:, :, 2]
-        incr = (self.log_drift(grid.times) - (0.5 * self.vol**2 + self.lam * kbar) * dt)[None] \
-            + self.vol * np.sqrt(dt)[None] * z[:, :, 0] + jumps
-        logs = np.log(self.spot) + np.concatenate([np.zeros((z.shape[0], 1)),
-                                                   np.cumsum(incr, axis=1)], axis=1)
+        incr = (
+            (self.log_drift(grid.times) - (0.5 * self.vol**2 + self.lam * kbar) * dt)[None]
+            + self.vol * np.sqrt(dt)[None] * z[:, :, 0]
+            + jumps
+        )
+        logs = np.log(self.spot) + np.concatenate(
+            [np.zeros((z.shape[0], 1)), np.cumsum(incr, axis=1)], axis=1
+        )
         idx = np.concatenate(([0], grid.obs_idx))
         t_all = np.concatenate(([0.0], grid.obs_times))
         iv = np.broadcast_to(self.vol**2 * np.diff(t_all), (z.shape[0], t_all.size - 1))
-        return Paths(times=t_all, spot=np.exp(logs[:, idx]),
-                     discount=self._deterministic_discount(grid), int_var=np.array(iv))
+        return Paths(
+            times=t_all,
+            spot=np.exp(logs[:, idx]),
+            discount=self._deterministic_discount(grid),
+            int_var=np.array(iv),
+        )
 
 
 @dataclass
@@ -131,6 +142,7 @@ class Heston(Model):
     dS/S = (r - q - λk̄) dt + sqrt(v) dW_S + (J-1) dN
     dv   = κ(θ - v) dt + ξ sqrt(v) dW_v,   d<W_S, W_v> = ρ dt
     """
+
     spot: float = 100.0
     v0: float = 0.04
     kappa: float = 1.5
@@ -155,8 +167,10 @@ class Heston(Model):
     @property
     def params(self):
         from ..analytics.heston import HestonParams
-        return HestonParams(self.v0, self.kappa, self.theta, self.xi, self.rho,
-                            self.lam, self.mu_j, self.sigma_j)
+
+        return HestonParams(
+            self.v0, self.kappa, self.theta, self.xi, self.rho, self.lam, self.mu_j, self.sigma_j
+        )
 
     # --- schéma QE ------------------------------------------------------
     def _qe_step(self, v, dt, zv, zs):
@@ -225,8 +239,9 @@ class Heston(Model):
             v_next, dlog = step_fn(v, dt[i], z[:, i, 0], z[:, i, 1])
             if self.lam > 0:
                 nj = poisson_inverse(ndtr(z[:, i, 2]), self.lam * dt[i])
-                dlog = dlog + nj * self.mu_j + np.sqrt(nj) * self.sigma_j * z[:, i, 3] \
-                    - self.lam * kbar * dt[i]
+                dlog = (
+                    dlog + nj * self.mu_j + np.sqrt(nj) * self.sigma_j * z[:, i, 3] - self.lam * kbar * dt[i]
+                )
             logs += drift[i] + dlog
             if self.scheme == "qe":
                 acc += 0.5 * (v + v_next) * dt[i]
@@ -239,8 +254,13 @@ class Heston(Model):
                 var[:, j] = np.maximum(v, 0.0)
                 iv[:, j - 1] = acc
                 acc = np.zeros(n)
-        return Paths(times=np.concatenate(([0.0], grid.obs_times)), spot=spot,
-                     discount=self._deterministic_discount(grid), int_var=iv, variance=var)
+        return Paths(
+            times=np.concatenate(([0.0], grid.obs_times)),
+            spot=spot,
+            discount=self._deterministic_discount(grid),
+            int_var=iv,
+            variance=var,
+        )
 
 
 @dataclass
@@ -249,6 +269,7 @@ class SABR(Model):
 
     ``spot`` est le forward F0 ; ``rate`` sert uniquement à l'actualisation.
     """
+
     spot: float = 0.03
     alpha: float = 0.03
     beta: float = 0.5
@@ -292,5 +313,9 @@ class SABR(Model):
                 out[:, j] = f
                 iv[:, j - 1] = acc
                 acc = np.zeros(n)
-        return Paths(times=np.concatenate(([0.0], grid.obs_times)), spot=out,
-                     discount=self._deterministic_discount(grid), int_var=iv)
+        return Paths(
+            times=np.concatenate(([0.0], grid.obs_times)),
+            spot=out,
+            discount=self._deterministic_discount(grid),
+            int_var=iv,
+        )

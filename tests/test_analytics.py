@@ -2,9 +2,20 @@ import numpy as np
 import pytest
 from scipy.integrate import quad
 
-from mcfin.analytics import (HestonParams, barrier_price, bs_greeks, bs_price, calibrate_heston,
-                             heston_cf, heston_implied_vol, heston_price, implied_vol,
-                             leisen_reimer_price, merton_price, sabr_hagan_vol)
+from mcfin.analytics import (
+    HestonParams,
+    barrier_price,
+    bs_greeks,
+    bs_price,
+    calibrate_heston,
+    heston_cf,
+    heston_implied_vol,
+    heston_price,
+    implied_vol,
+    leisen_reimer_price,
+    merton_price,
+    sabr_hagan_vol,
+)
 
 
 def test_put_call_parity_and_greeks():
@@ -13,9 +24,17 @@ def test_put_call_parity_and_greeks():
     assert np.isclose(c - p, S * np.exp(-q * T) - K * np.exp(-r * T))
     g = bs_greeks(S, K, T, r, v, q, "call")
     h = 1e-4
-    assert np.isclose(g["delta"], (bs_price(S + h, K, T, r, v, q) - bs_price(S - h, K, T, r, v, q)) / (2 * h), atol=1e-6)
-    assert np.isclose(g["vega"], (bs_price(S, K, T, r, v + h, q) - bs_price(S, K, T, r, v - h, q)) / (2 * h), atol=1e-5)
-    assert np.isclose(g["gamma"], (bs_price(S + 1e-2, K, T, r, v, q) - 2 * c + bs_price(S - 1e-2, K, T, r, v, q)) / 1e-4, atol=1e-5)
+    assert np.isclose(
+        g["delta"], (bs_price(S + h, K, T, r, v, q) - bs_price(S - h, K, T, r, v, q)) / (2 * h), atol=1e-6
+    )
+    assert np.isclose(
+        g["vega"], (bs_price(S, K, T, r, v + h, q) - bs_price(S, K, T, r, v - h, q)) / (2 * h), atol=1e-5
+    )
+    assert np.isclose(
+        g["gamma"],
+        (bs_price(S + 1e-2, K, T, r, v, q) - 2 * c + bs_price(S - 1e-2, K, T, r, v, q)) / 1e-4,
+        atol=1e-5,
+    )
 
 
 def test_implied_vol_roundtrip(rng):
@@ -38,7 +57,13 @@ def test_heston_lewis_vs_quadrature():
         for K in (70, 100, 130):
             k = np.log(F / K)
             f = lambda u: np.real(np.exp(1j * u * k) * heston_cf(u - 0.5j, T, p)) / (u * u + 0.25)
-            ref = S0 * np.exp(-q * T) - np.sqrt(F * K) * np.exp(-r * T) / np.pi * quad(f, 0, np.inf, limit=2000, epsabs=1e-14, epsrel=1e-12)[0]
+            ref = (
+                S0 * np.exp(-q * T)
+                - np.sqrt(F * K)
+                * np.exp(-r * T)
+                / np.pi
+                * quad(f, 0, np.inf, limit=2000, epsabs=1e-14, epsrel=1e-12)[0]
+            )
             assert abs(heston_price(S0, K, T, r, q, p)[0] - ref) < 1e-9
 
 
@@ -72,10 +97,18 @@ def test_merton_reduces_to_bs():
 
 
 def test_leisen_reimer():
-    assert abs(leisen_reimer_price(36, 40, 1, 0.06, 0.2, american=False) - bs_price(36, 40, 1, 0.06, 0.2, 0, "put")) < 1e-5
+    assert (
+        abs(
+            leisen_reimer_price(36, 40, 1, 0.06, 0.2, american=False)
+            - bs_price(36, 40, 1, 0.06, 0.2, 0, "put")
+        )
+        < 1e-5
+    )
     assert abs(leisen_reimer_price(36, 40, 1, 0.06, 0.2) - 4.4867) < 1e-3  # référence littérature
 
 
 def test_sabr_atm_and_lognormal_limit():
     # β = 1, ν -> 0 : vol lognormale constante α
-    assert np.allclose(sabr_hagan_vol(0.03, np.array([0.02, 0.03, 0.04]), 1.0, 0.2, 1.0, 0.0, 1e-8), 0.2, atol=1e-6)
+    assert np.allclose(
+        sabr_hagan_vol(0.03, np.array([0.02, 0.03, 0.04]), 1.0, 0.2, 1.0, 0.0, 1e-8), 0.2, atol=1e-6
+    )

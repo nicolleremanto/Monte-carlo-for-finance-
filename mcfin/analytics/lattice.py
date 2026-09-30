@@ -5,6 +5,7 @@ de Peizer-Pratt, méthode 2) converge en O(1/n²) pour les européennes,
 contre O(1/n) pour Cox-Ross-Rubinstein, et reste très précis pour les
 américaines.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -16,11 +17,13 @@ __all__ = ["leisen_reimer_price"]
 
 def _peizer_pratt(x: float, n: int) -> float:
     return 0.5 + np.sign(x) * np.sqrt(
-        0.25 - 0.25 * np.exp(-(x / (n + 1.0 / 3.0 + 0.1 / (n + 1))) ** 2 * (n + 1.0 / 6.0)))
+        0.25 - 0.25 * np.exp(-((x / (n + 1.0 / 3.0 + 0.1 / (n + 1))) ** 2) * (n + 1.0 / 6.0))
+    )
 
 
-def leisen_reimer_price(S, K, T, r, sigma, q=0.0, option_type="put",
-                        american: bool = True, n_steps: int = 1001) -> float:
+def leisen_reimer_price(
+    S, K, T, r, sigma, q=0.0, option_type="put", american: bool = True, n_steps: int = 1001
+) -> float:
     n = n_steps if n_steps % 2 else n_steps + 1
     dt = T / n
     d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
