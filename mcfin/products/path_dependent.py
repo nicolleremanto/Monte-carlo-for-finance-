@@ -134,7 +134,7 @@ class LookbackOption(Product):
         shift = 1.0
         if self.bgk_sigma is not None:
             shift = np.exp(BGK_BETA * self.bgk_sigma * np.sqrt(self.maturity / self.n_monitoring))
-        if self.option_type == "call":
+        if option_sign(self.option_type) > 0:
             val = s[:, -1] - s.min(axis=1) / shift
         else:
             val = s.max(axis=1) * shift - s[:, -1]

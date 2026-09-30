@@ -42,9 +42,8 @@ print(f"{'Méthode':<34}{'Prix':>10}{'Err. std':>11}{'Gain variance':>15}")
 for name, r in rows:
     print(f"{name:<34}{r.price:>10.5f}{r.stderr:>11.5f}{(base / r.stderr) ** 2:>15.1f}")
 print(
-    "NB : l'erreur standard « naïve » du moment matching n'est pas fiable (tirages\n"
-    "rendus dépendants par la renormalisation) ; son intérêt est surtout le biais réduit\n"
-    "sur les grandeurs dont on impose les moments."
+    "NB : le moment matching rend les tirages d'un groupe dépendants ; son erreur standard\n"
+    "est donc estimée sur 16 groupes renormalisés indépendamment (comme en QMC randomisé)."
 )
 
 # convergence en fonction du nombre de trajectoires

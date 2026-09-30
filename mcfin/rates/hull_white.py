@@ -31,6 +31,7 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.special import ndtr
 
+from ..analytics.black_scholes import option_sign
 from ..market.curves import Curve
 
 __all__ = ["HWPaths", "HullWhite"]
@@ -82,7 +83,7 @@ class HullWhite:
         P_T, P_S = self.curve.df(T), self.curve.df(S)
         sp = self._zcb_vol(T, S)
         h = np.log(P_S / (P_T * K)) / sp + 0.5 * sp
-        if option_type == "call":
+        if option_sign(option_type) > 0:
             return P_S * ndtr(h) - K * P_T * ndtr(h - sp)
         return K * P_T * ndtr(-h + sp) - P_S * ndtr(-h)
 

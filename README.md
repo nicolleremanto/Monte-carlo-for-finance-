@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/nicolleremanto/Monte-carlo-for-finance-/actions/workflows/tests.yml/badge.svg)](https://github.com/nicolleremanto/Monte-carlo-for-finance-/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
-![couverture](https://img.shields.io/badge/couverture%20de%20code-93%25-brightgreen)
+![couverture](https://img.shields.io/badge/couverture%20de%20code-94%25-brightgreen)
 ![lint](https://img.shields.io/badge/lint-ruff-261230)
 ![typage](https://img.shields.io/badge/typage-mypy-2a6db2)
 ![licence](https://img.shields.io/badge/licence-MIT-lightgrey)
@@ -136,14 +136,17 @@ cd examples && python 01_convergence_reduction_variance.py
 
 ## Qualité logicielle
 
-* **98 tests** (`pytest`) dont des **tests de propriétés** (*hypothesis*, 1 500 cas générés) : parité call-put,
+* **108 tests** (`pytest`) dont des **tests de propriétés** (*hypothesis*, 1 500 cas générés) : parité call-put,
   bornes d'arbitrage, convexité en strike, équation de Black-Scholes sur les Greeks, sur des
   centaines de jeux de paramètres tirés au hasard ;
 * tests **statistiques** : tolérances exprimées en erreurs standard, couverture des IC testée
   par IC de Wilson, normalité par Kolmogorov-Smirnov ;
-* **couverture de code 93 %** (branches incluses), seuil à 90 % imposé en CI ;
+* **couverture de code 94 %** (branches incluses), seuil à 90 % imposé en CI ;
 * **ruff** (lint + format) et **mypy** sans aucune alerte ; package typé (`py.typed`) ;
 * CI GitHub Actions : lint, typage, tests sur Python 3.10 / 3.11 / 3.12 ;
+* **revue de code adversariale indépendante** : 6 défauts trouvés (dont une borne duale
+  fausse avec une courbe de dividende non plate et une erreur standard surestimée en moment
+  matching), tous corrigés et verrouillés par `tests/test_regressions.py` (cf. `CHANGELOG.md`) ;
 * `make check` reproduit la CI en local.
 
 ## Architecture

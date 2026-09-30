@@ -126,24 +126,38 @@ def geometric_asian_price(S, K, T, r, sigma, fixing_times, q=0.0, option_type="c
     return float(np.exp(-r * T) * w * (fwd_g * ndtr(w * d1) - K * ndtr(w * d2)))
 
 
-def lookback_floating_price(S, T, r, sigma, q=0.0, option_type="call"):
-    """Lookback à strike flottant, surveillance continue, émis à la date 0
-    (min = max = S) : call paie S_T - min S, put paie max S - S_T (Hull)."""
+def _lookback_formula(S, T, r, sigma, q, w):
     b = r - q
     sT = sigma * np.sqrt(T)
     a1 = (b + 0.5 * sigma**2) * T / sT
     a2 = a1 - sT
     k = sigma**2 / (2 * b)
     dq, dr = np.exp(-q * T), np.exp(-r * T)
-    if option_type == "call":
+    if w > 0:  # call : S_T - min S
         return float(
             S * dq * ndtr(a1)
             - S * dq * k * ndtr(-a1)
             - S * dr * (ndtr(a2) - k * ndtr(-a1 + 2 * b * np.sqrt(T) / sigma))
         )
-    # put : max(S) - S_T, avec b1 = (b + σ²/2)√T/σ
+    # put : max S - S_T
     return float(
         S * dr * (ndtr(-a2) - k * ndtr(a1 - 2 * b * np.sqrt(T) / sigma))
         + S * dq * k * ndtr(a1)
         - S * dq * ndtr(-a1)
     )
+
+
+def lookback_floating_price(S, T, r, sigma, q=0.0, option_type="call"):
+    """Lookback à strike flottant, surveillance continue, émis à la date 0
+    (min = max = S) : call paie S_T - min S, put paie max S - S_T (Hull).
+
+    La formule contient k = σ²/(2b), b = r - q, singulier en b = 0 alors que le
+    prix y est régulier : on moyenne alors les prix en r ± ε (erreur O(ε²)).
+    """
+    w = option_sign(option_type)
+    if abs(r - q) < 1e-6:
+        eps = 1e-4
+        return 0.5 * (
+            _lookback_formula(S, T, q + eps, sigma, q, w) + _lookback_formula(S, T, q - eps, sigma, q, w)
+        )
+    return _lookback_formula(S, T, r, sigma, q, w)

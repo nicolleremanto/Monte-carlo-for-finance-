@@ -304,8 +304,9 @@ class SABR(Model):
                 loc_var = a * a
             else:
                 fb = np.power(np.maximum(f, 0.0), self.beta)
+                # variance lognormale locale en début de pas : (α F^{β-1})² (0 si absorbé)
+                loc_var = np.where(f > 0, (a * fb / np.maximum(f, 1e-300)) ** 2, 0.0)
                 f = np.maximum(f + a * fb * sq * z1, 0.0)  # absorption en 0
-                loc_var = (a * fb / np.maximum(f, 1e-300)) ** 2
             acc += np.minimum(loc_var, 1e6) * dt[i]
             a = a * np.exp(self.nu * sq * z2 - 0.5 * self.nu**2 * dt[i])
             if i + 1 in obs:

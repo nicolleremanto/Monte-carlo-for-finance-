@@ -36,14 +36,17 @@ def lsm_backward(features, h, df, degree=3, coeffs=None):
     """LSM générique.
 
     features : liste de K tableaux (n, m) ; h : (n, K) valeurs d'exercice en
-    t_k ; df : (n, K) déflateurs D(0, t_k). Si ``coeffs`` est None, estime les
+    t_k ; df : (n, K) déflateurs D(0, t_k). ``coeffs`` = K vecteurs de
+    régression suivis de l'échelle de normalisation. S'il vaut None, estime les
     coefficients (rétro-induction) ; sinon applique la règle (hors
     échantillon). Renvoie (flux déflatés par trajectoire, coefficients).
     """
     n, K = h.shape
-    scale = np.maximum(np.abs(h).mean(), 1e-12)
     if coeffs is None:
-        coeffs = [None] * K
+        # l'échelle de normalisation du payoff est figée à l'estimation et
+        # réutilisée hors échantillon (les coefficients en dépendent)
+        scale = float(np.maximum(np.abs(h).mean(), 1e-12))
+        coeffs = [None] * K + [scale]
         cf = h[:, -1] * df[:, -1]
         for k in range(K - 2, -1, -1):
             itm = h[:, k] > 0
@@ -55,6 +58,7 @@ def lsm_backward(features, h, df, degree=3, coeffs=None):
             ex = itm & (h[:, k] > X @ beta)
             cf = np.where(ex, h[:, k] * df[:, k], cf)
         return cf, coeffs
+    scale = coeffs[-1]
     alive = np.ones(n, dtype=bool)
     cf = np.zeros(n)
     for k in range(K):

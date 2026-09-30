@@ -34,8 +34,8 @@ $O(\varepsilon^{-3})$ ; le MLMC ramène ce coût à $O(\varepsilon^{-2}(\log\var
 | pseudo-aléatoire | $\hat\sigma/\sqrt N$ |
 | antithétiques | écart-type des **moyennes de paires** $/\sqrt{N/2}$ (les deux tirages d'une paire sont corrélés) |
 | stratification | $\sqrt{\sum_j p_j^2 s_j^2/n_j}$ |
-| QMC randomisé | écart-type des $R$ estimateurs indépendants (brouillages) $/\sqrt R$ |
-| moment matching | l'estimateur naïf n'est pas valide (tirages rendus dépendants) |
+| QMC randomisé | écart-type des $R$ estimateurs indépendants (brouillages) $/\sqrt R$, IC de Student à $R-1$ ddl |
+| moment matching | tirages d'un groupe rendus dépendants : écart-type sur $R$ groupes renormalisés indépendamment (Student à $R-1$ ddl) |
 
 ---
 

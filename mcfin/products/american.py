@@ -168,8 +168,13 @@ def andersen_broadie_upper_bound(
     n_inner: int = 500,
     seed: int = 1234,
     chunk: int = 200,
+    lower_bound_stderr: float = 0.0,
 ) -> MCResult:
-    """Borne supérieure duale d'Andersen-Broadie (modèle Black-Scholes, taux plats).
+    """Borne supérieure duale d'Andersen-Broadie (modèle Black-Scholes, courbes plates).
+
+    ``lower_bound`` (et son erreur standard ``lower_bound_stderr``) est le prix
+    LSM hors échantillon ; il sert de E_0[L̃_1] dans la martingale et son bruit
+    est propagé à l'erreur standard de la borne supérieure.
 
     Pour le GBM, S_{t_j} = S_{t_k} · R_{k,j} où R est indépendant de S_{t_k} :
     les simulations imbriquées se font sur des trajectoires « unitaires ».
@@ -179,8 +184,11 @@ def andersen_broadie_upper_bound(
     if not isinstance(model, BlackScholes):
         raise TypeError("implémenté pour BlackScholes (multi-actifs)")
     r_curve = as_curve(model.rate)
-    if not isinstance(r_curve, FlatCurve):
-        raise TypeError("taux plats requis")
+    divs = model.div if isinstance(model.div, (list, tuple, np.ndarray)) else [model.div]
+    # les trajectoires imbriquées « unitaires » partent de t = 0 : elles ne sont
+    # correctes que si la dérive est invariante par translation en temps
+    if not isinstance(r_curve, FlatCurve) or not all(isinstance(as_curve(q), FlatCurve) for q in divs):
+        raise TypeError("courbes de taux et de dividendes plates requises")
     rng = np.random.default_rng(seed)
     t_ex = np.asarray(product.exercise_times, dtype=float)
     K = t_ex.size
@@ -231,8 +239,11 @@ def andersen_broadie_upper_bound(
         M[:, k] = M[:, k - 1] + L[:, k] - Q[:, k - 1]
     dual = np.max(h_disc - M, axis=1)
     upper = float(dual.mean())
+    # la borne inférieure (constante estimée) entre dans chaque échantillon dual :
+    # son bruit s'ajoute à celui de la dispersion du dual (échantillons indépendants)
+    se_dual = float(dual.std(ddof=1) / np.sqrt(n_outer))
     res = MCResult(
-        upper, float(dual.std(ddof=1) / np.sqrt(n_outer)), n_outer, method="Andersen-Broadie (dual)"
+        upper, float(np.hypot(se_dual, lower_bound_stderr)), n_outer, method="Andersen-Broadie (dual)"
     )
     res.extra["duality_gap"] = upper - lower_bound
     res.extra["point_estimate"] = 0.5 * (upper + lower_bound)

@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..analytics.black_scholes import bs_greeks, bs_price
+from ..analytics.black_scholes import bs_greeks, bs_price, option_sign
 
 __all__ = [
     "HedgeResult",
@@ -116,7 +116,7 @@ def simulate_delta_hedge(
         trade = delta - delta_prev
         fee = 0.5 * cost * np.abs(trade) * S[:, k] if (k > 0 or setup_costs) else 0.0 * trade
         cash -= trade * S[:, k] + fee
-        costs = costs * np.exp(r * dt) + fee
+        costs = (costs + fee) * np.exp(r * dt)  # capitalisé comme le compte cash
         gamma_pnl += (
             0.5 * np.exp(r * (T - k * dt)) * g["gamma"] * S[:, k] ** 2 * (sigma_h**2 - sigma_real**2) * dt
         )
@@ -125,7 +125,7 @@ def simulate_delta_hedge(
         cash += delta * S[:, k + 1] * (np.exp(q * dt) - 1.0)
         delta_prev = delta
     ST = S[:, -1]
-    payoff = np.maximum((1 if option_type == "call" else -1) * (ST - K), 0.0)
+    payoff = np.maximum(option_sign(option_type) * (ST - K), 0.0)
     unwind_fee = 0.5 * cost * np.abs(delta_prev) * ST * float(setup_costs)
     pnl = cash + delta_prev * ST - unwind_fee - payoff
     return HedgeResult(

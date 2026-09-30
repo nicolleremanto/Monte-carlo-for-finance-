@@ -11,7 +11,9 @@ def run(model, product, n=100_000, n_outer=500, n_inner=1000):
         mc.MonteCarloEngine(n, seed=1, antithetic=True).simulate(model, product.observation_times), product
     )
     lo = lsm.price(mc.MonteCarloEngine(n, seed=2).simulate(model, product.observation_times), product)
-    up = mc.andersen_broadie_upper_bound(model, product, lsm, lo.price, n_outer, n_inner)
+    up = mc.andersen_broadie_upper_bound(
+        model, product, lsm, lo.price, n_outer, n_inner, lower_bound_stderr=lo.stderr
+    )
     return lo, up
 
 

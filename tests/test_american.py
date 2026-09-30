@@ -36,7 +36,9 @@ def test_andersen_broadie_brackets_max_call():
     m = BlackScholes(spot=np.array([100.0, 100.0]), vol=0.2, rate=0.05, div=0.1, corr=np.eye(2))
     mc = BermudanOption(100, np.arange(1, 10) / 3, "call", "max")
     lsm, lo = _lsm(m, mc, n=200_000)
-    up = andersen_broadie_upper_bound(m, mc, lsm, lo.price, n_outer=500, n_inner=500)
+    up = andersen_broadie_upper_bound(
+        m, mc, lsm, lo.price, n_outer=500, n_inner=500, lower_bound_stderr=lo.stderr
+    )
     assert lo.price < 13.90 + 3 * lo.stderr
     assert up.price > 13.90 - 3 * up.stderr
     assert 0 < up.extra["duality_gap"] < 0.2

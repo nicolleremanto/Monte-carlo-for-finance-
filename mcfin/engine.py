@@ -33,7 +33,7 @@ import numpy as np
 
 from .core.results import MCResult, Paths
 from .core.rng import GaussianGenerator
-from .models.base import Model, bump_model
+from .models.base import Model, bump_model, with_params
 
 __all__ = ["ControlVariate", "MonteCarloEngine"]
 
@@ -80,7 +80,10 @@ class MonteCarloEngine:
     n_paths : nombre total de trajectoires (en QMC : par brouillage × R).
     method : "pseudo" | "sobol".
     antithetic, moment_matching, construction, n_strata : voir GaussianGenerator.
-    n_randomizations : nombre de brouillages indépendants en QMC.
+    n_randomizations : nombre de répétitions indépendantes servant à estimer
+        l'erreur quand les tirages d'un même lot ne sont pas indépendants :
+        brouillages de Sobol (QMC randomisé) ou groupes standardisés séparément
+        (moment matching). L'IC utilise alors Student à R - 1 degrés de liberté.
     batch_size : taille des lots (mémoire bornée quel que soit n_paths).
     max_dt : pas de temps maximal (sinon celui du modèle).
     """
@@ -105,7 +108,10 @@ class MonteCarloEngine:
         self.antithetic = antithetic
         self.moment_matching = moment_matching
         self.construction = construction
-        self.n_randomizations = n_randomizations if method == "sobol" else 1
+        # QMC et moment matching : tirages dépendants au sein d'une répétition,
+        # l'erreur est estimée sur R répétitions indépendantes
+        self.replicated = method == "sobol" or moment_matching
+        self.n_randomizations = n_randomizations if self.replicated else 1
         self.batch_size = int(batch_size)
         self.max_dt = max_dt
         self.n_strata = n_strata
@@ -155,9 +161,15 @@ class MonteCarloEngine:
         parts = []
         for b in self._batches(n, self._batch_size(grid, model.n_factors)):
             z = gen.normals(b, grid.times, model.n_factors)
+            weight = None
             if drift_shift is not None:
                 z = z + drift_shift[None]
-            parts.append(model.simulate(grid, z, gen))
+                weight = np.exp(-(z * drift_shift[None]).sum(axis=(1, 2)) + 0.5 * np.sum(drift_shift**2))
+            paths = model.simulate(grid, z, gen)
+            if weight is not None:
+                # rapport de vraisemblance à appliquer à toute espérance calculée sur ces trajectoires
+                paths.extra["is_weight"] = weight
+            parts.append(paths)
         return _concat_paths(parts)
 
     # ------------------------------------------------------------------
@@ -229,7 +241,7 @@ class MonteCarloEngine:
         def adjust(y, x):
             return y if beta is None else y - (x - mu_x) @ beta
 
-        if self.method == "sobol":
+        if self.replicated:
             ests = np.array([adjust(y, x).mean() for y, x in samples])
             price = float(ests.mean())
             stderr = float(ests.std(ddof=1) / np.sqrt(ests.size)) if ests.size > 1 else np.nan
@@ -255,8 +267,9 @@ class MonteCarloEngine:
             + ("+CV" if control_variates else "")
             + ("+IS" if drift_shift is not None else "")
         )
-        dof = self.n_randomizations - 1 if self.method == "sobol" else None
-        return MCResult(price, stderr, self.n_paths, time.perf_counter() - t0, desc, extra, dof)
+        dof = self.n_randomizations - 1 if self.replicated else None
+        n_sim = sum(len(y) for y, _ in samples) * (2 if self.antithetic else 1)
+        return MCResult(price, stderr, n_sim, time.perf_counter() - t0, desc, extra, dof)
 
     # ------------------------------------------------------------------
     def greeks(
@@ -272,6 +285,9 @@ class MonteCarloEngine:
         Avec la même graine, V(θ+h) - V(θ-h) a une variance O(1) au lieu de
         O(1/h²) : c'est ce qui rend les Greeks par bump utilisables.
         ``spot_bump`` est relatif (1 % par défaut) ; ``params`` = {nom: choc absolu}.
+        En multi-actifs, ``delta``/``gamma`` correspondent au choc *parallèle* de
+        tous les spots (par unité de spot moyen) et ``delta_by_asset`` donne les
+        deltas individuels ∂V/∂S_i.
         """
         base = self.price(model, product)
         out = {"price": base.price, "price_stderr": base.stderr}
@@ -283,6 +299,15 @@ class MonteCarloEngine:
         out["delta"] = (up - dn) / (2 * hs)
         if second_order:
             out["gamma"] = (up - 2 * base.price + dn) / hs**2
+        if s0.ndim and s0.size > 1:
+            deltas = []
+            for i in range(s0.size):
+                e = np.zeros(s0.size)
+                e[i] = spot_bump
+                up_i = self.price(with_params(model, spot=s0 * (1 + e)), product).price
+                dn_i = self.price(with_params(model, spot=s0 * (1 - e)), product).price
+                deltas.append((up_i - dn_i) / (2 * h[i]))
+            out["delta_by_asset"] = np.array(deltas)
         for name, bump in (params or {}).items():
             up = self.price(bump_model(model, name, bump), product).price
             dn = self.price(bump_model(model, name, -bump), product).price

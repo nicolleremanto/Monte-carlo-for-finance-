@@ -12,7 +12,7 @@ from ..core.results import Paths
 from ..core.timegrid import TimeGrid
 from ..market.curves import Curve, as_curve
 
-__all__ = ["Model", "bump_model"]
+__all__ = ["Model", "bump_model", "with_params"]
 
 
 class Model(ABC):
@@ -74,6 +74,11 @@ class Model(ABC):
         return self.rate_curve.df(np.concatenate(([0.0], grid.obs_times)))
 
 
+def with_params(model: Model, **changes: Any) -> Model:
+    """Copie du modèle avec des paramètres remplacés (même graine => CRN)."""
+    return dataclasses.replace(model, **changes)  # type: ignore[type-var]
+
+
 def bump_model(model: Model, param: str, h: float, relative: bool = False) -> Model:
     """Renvoie une copie du modèle avec ``param`` choqué de ``h``.
 
@@ -89,4 +94,4 @@ def bump_model(model: Model, param: str, h: float, relative: bool = False) -> Mo
         new = arr * (1 + h) if relative else arr + h
         if np.ndim(value) == 0:
             new = float(new)
-    return dataclasses.replace(model, **{param: new})  # type: ignore[type-var]
+    return with_params(model, **{param: new})
