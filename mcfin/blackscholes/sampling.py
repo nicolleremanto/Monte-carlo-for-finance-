@@ -96,7 +96,7 @@ def marsaglia_polar(n: int, rng: np.random.Generator) -> tuple[np.ndarray, float
         v, s = v[ok], s[ok]
         f = np.sqrt(-2.0 * np.log(s) / s)
         out.append((v * f[:, None]).ravel())
-        got += 2 * ok.sum()
+        got += 2 * int(ok.sum())
     return np.concatenate(out)[:n], got / (2 * drawn)
 
 
@@ -110,5 +110,5 @@ def rejection_laplace(n: int, rng: np.random.Generator) -> tuple[np.ndarray, flo
         accept = rng.random(m) <= np.exp(-0.5 * (np.abs(x) - 1.0) ** 2)
         drawn += m
         out.append(x[accept])
-        got += accept.sum()
+        got += int(accept.sum())
     return np.concatenate(out)[:n], got / drawn

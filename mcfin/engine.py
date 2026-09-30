@@ -28,6 +28,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -227,7 +228,7 @@ class MonteCarloEngine:
         t0 = time.perf_counter()
         samples = self.sample(model, product, control_variates, drift_shift)
         mu_x = np.array([cv.expectation for cv in control_variates])
-        extra = {}
+        extra: dict[str, Any] = {}
         beta = None
         if control_variates:
             y_all = np.concatenate([s[0] for s in samples])
@@ -290,7 +291,7 @@ class MonteCarloEngine:
         deltas individuels ∂V/∂S_i.
         """
         base = self.price(model, product)
-        out = {"price": base.price, "price_stderr": base.stderr}
+        out: dict[str, Any] = {"price": base.price, "price_stderr": base.stderr}
         s0 = np.asarray(model.spot, dtype=float)
         h = spot_bump * s0
         up = self.price(bump_model(model, "spot", spot_bump, relative=True), product).price

@@ -54,12 +54,12 @@ class LMMPaths:
     def swap(self, k: int, end: int):
         """(taux swap, annuité) en T_k du swap T_k -> T_end."""
         tau = np.diff(self.tenor)
-        dfs = []
+        cols = []
         p = np.ones(self.forwards.shape[0])
         for j in range(k, end):
             p = p / (1 + tau[j] * self.forwards[:, k, j])
-            dfs.append(p)
-        dfs = np.column_stack(dfs)
+            cols.append(p)
+        dfs = np.column_stack(cols)
         annuity = dfs @ tau[k:end]
         return (1 - dfs[:, -1]) / annuity, annuity
 

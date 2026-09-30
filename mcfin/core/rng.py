@@ -225,7 +225,8 @@ class GaussianGenerator:
     def _get_builder(self, times: np.ndarray):
         if self.construction == "standard":
             return None
-        if self._builder is None or not np.array_equal(self._builder_times, times):
+        cached = self._builder_times
+        if self._builder is None or cached is None or not np.array_equal(cached, times):
             cls = BrownianBridge if self.construction == "bridge" else PCAConstruction
             self._builder = cls(times)
             self._builder_times = times.copy()

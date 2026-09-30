@@ -107,9 +107,9 @@ class ExposureResult:
     mtm: np.ndarray  # (n, nt) valeur du netting set
     exposure: np.ndarray  # (n, nt) après collatéral
     discount: np.ndarray  # (n, nt)
-    ee: np.ndarray = field(default=None)
-    ene: np.ndarray = field(default=None)
-    pfe: np.ndarray = field(default=None)
+    ee: np.ndarray | None = field(default=None)
+    ene: np.ndarray | None = field(default=None)
+    pfe: np.ndarray | None = field(default=None)
     epe: float = 0.0
     eepe: float = 0.0
 
@@ -125,10 +125,10 @@ def simulate_exposure(
 ) -> ExposureResult:
     t_exp = np.asarray(exposure_times, dtype=float)
     fix_dates = np.unique(np.concatenate([tr.schedule[:-1] for tr in trades]))
-    grid = [t_exp, fix_dates]
+    dates = [t_exp, fix_dates]
     if csa is not None:
-        grid.append(np.maximum(t_exp - csa.mpor, 0.0))
-    grid = np.unique(np.round(np.concatenate(grid), 10))
+        dates.append(np.maximum(t_exp - csa.mpor, 0.0))
+    grid = np.unique(np.round(np.concatenate(dates), 10))
     grid = grid[grid > 0]
     paths: HWPaths = hw.simulate(grid, n_paths, seed=seed, antithetic=True)
     n = paths.x.shape[0]

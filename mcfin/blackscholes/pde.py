@@ -120,7 +120,7 @@ def bs_pde_price(
     smooth_payoff: bool = True,
 ) -> PDEResult:
     """Prix, delta, gamma et theta par Crank-Nicolson (+ Rannacher)."""
-    w = option_sign(option_type)
+    w = float(option_sign(option_type))
     half = n_std * sigma * np.sqrt(T)
     x0 = np.log(S0)
     x = np.linspace(x0 - half, x0 + half, n_space + 1)

@@ -226,18 +226,20 @@ def aad_greeks(pricer: Callable, params: dict[str, float], z: np.ndarray, batch_
     """
     names = list(params)
     n = z.shape[0]
-    prices, grads, weights = [], [], []
+    price_list: list[float] = []
+    grad_list: list[list[float]] = []
+    weights: list[int] = []
     for start in range(0, n, batch_size):
         zb = z[start : start + batch_size]
         tape = Tape()
         pv = {k: tape.variable(v) for k, v in params.items()}
         out = pricer(pv, zb)
         g = tape.gradient(out, [pv[k] for k in names])
-        prices.append(float(out.value))
-        grads.append([float(np.sum(x)) for x in g])
+        price_list.append(float(out.value))
+        grad_list.append([float(np.sum(x)) for x in g])
         weights.append(zb.shape[0])
     w = np.asarray(weights, float) / n
-    prices, grads = np.asarray(prices), np.asarray(grads)
+    prices, grads = np.asarray(price_list), np.asarray(grad_list)
     res = {"price": float(w @ prices)}
     nb = len(weights)
     for i, k in enumerate(names):

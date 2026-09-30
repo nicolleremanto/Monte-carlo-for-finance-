@@ -94,6 +94,8 @@ class BarrierOption(Product):
         alive = np.all(x > 0, axis=1).astype(float)
         if self.monitoring == "discrete":
             return alive
+        if paths.int_var is None:
+            raise ValueError("surveillance continue : le modèle doit fournir la variance intégrée (int_var)")
         iv = np.maximum(paths.int_var, 1e-300)
         prod_x = np.maximum(x[:, :-1], 0.0) * np.maximum(x[:, 1:], 0.0)
         p_cross = np.exp(-2.0 * prod_x / iv)

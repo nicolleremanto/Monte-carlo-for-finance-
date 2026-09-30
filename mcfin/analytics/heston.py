@@ -77,10 +77,10 @@ def heston_cf(u, T: float, p: HestonParams):
 def _quadrature(u_max: float):
     """Nœuds/poids Gauss-Legendre par panneaux : fins près de 0, puis de largeur 16."""
     x, w = np.polynomial.legendre.leggauss(32)
-    edges = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
-    while edges[-1] < u_max:
-        edges.append(edges[-1] + 16.0)
-    edges = np.asarray(edges)
+    breaks = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+    while breaks[-1] < u_max:
+        breaks.append(breaks[-1] + 16.0)
+    edges = np.asarray(breaks)
     a, b = edges[:-1, None], edges[1:, None]
     nodes = (0.5 * (b - a) * x[None, :] + 0.5 * (a + b)).ravel()
     weights = (0.5 * (b - a) * w[None, :]).ravel()

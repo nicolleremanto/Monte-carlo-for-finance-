@@ -50,7 +50,7 @@ ignore = [
 known-first-party = ["mcfin"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"  # stubs numpy >= 2.5 (syntaxe 3.12) ; compatibilité 3.10 testée en CI
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true

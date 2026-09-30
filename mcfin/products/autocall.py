@@ -42,7 +42,7 @@ class PhoenixAutocall(Product):
     non_call_periods: int = 0
     notional: float = 1.0
     initial_levels: float | np.ndarray | None = None  # niveaux de strike figés à l'émission
-    _daily: np.ndarray = field(default=None, init=False, repr=False)
+    _daily: np.ndarray | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self):
         self.observation_dates = np.asarray(self.observation_dates, dtype=float)
