@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck test coverage examples check
+.PHONY: install lint format typecheck test coverage examples check app
 
 install:        ## installation en mode développement
 	pip install -e ".[dev]"
@@ -24,3 +24,7 @@ examples:       ## exécute tous les exemples (régénère docs/figures)
 	cd examples && for f in [0-9]*.py; do echo "== $$f"; python $$f || exit 1; done
 
 check: lint typecheck coverage   ## tout ce que vérifie la CI
+
+app:            ## interface web locale (http://localhost:8000/app/)
+	python app/make_manifest.py
+	python app/serve.py

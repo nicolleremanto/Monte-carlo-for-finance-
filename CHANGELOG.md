@@ -1,5 +1,14 @@
 # Journal des modifications
 
+## 1.2.0
+
+### Ajouts
+- Interface web (`app/`) : onglets Black-Scholes et moteur Monte Carlo, graphiques interactifs,
+  thèmes clair/sombre, mise en page mobile. Même code Python exécuté soit dans le navigateur
+  (Pyodide / WebAssembly, publication GitHub Pages), soit par un serveur local (`app/serve.py`).
+- `tests/test_app.py` : pont Python de l'interface (25 couples modèle × produit) et manifeste Pyodide.
+- La suite complète est vérifiée avec numpy 2.0.2 / scipy 1.14.1 (versions embarquées par Pyodide).
+
 ## 1.1.0
 
 ### Ajouts

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcfin"
-version = "1.1.0"
+version = "1.2.0"
 description = "Monte Carlo pour la salle des marchés : pricing exotique, Black-Scholes de A à Z, Greeks (AAD), XVA, VaR"
 readme = "README.md"
 requires-python = ">=3.10"

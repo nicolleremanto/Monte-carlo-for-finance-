@@ -1,0 +1,45 @@
+name: interface web (GitHub Pages)
+
+# Publie l'interface (app/) et la librairie (mcfin/) comme site statique :
+# les calculs s'exécutent dans le navigateur via Pyodide (WebAssembly).
+# Prérequis unique : Settings → Pages → Source = « GitHub Actions ».
+
+on:
+  push:
+    paths: ["app/**", "mcfin/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Assemblage du site
+        run: |
+          python app/make_manifest.py
+          mkdir -p _site
+          cp -r app mcfin _site/
+          find _site -name "__pycache__" -prune -exec rm -rf {} +
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=app/"><a href="app/">Interface mcfin</a>\n' > _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

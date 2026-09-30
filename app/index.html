@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mcfin — Monte Carlo</title>
+  <meta name="description" content="Interface de la librairie mcfin : Black-Scholes de A à Z et moteur Monte Carlo (Heston, Merton, rough Bergomi, volatilité locale), exécutée dans le navigateur.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M5 22 L11 14 L16 18 L21 9 L27 12' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 22 L11 14 L16 18 L21 9 L27 12"/></svg></span>
+    <div>
+      <h1>mcfin</h1>
+      <p>Monte Carlo pour la salle des marchés</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" class="tab active" data-page="bs" aria-selected="true">Black-Scholes</button>
+    <button role="tab" class="tab" data-page="mc" aria-selected="false">Moteur Monte Carlo</button>
+  </nav>
+  <div class="status" id="status" aria-live="polite">
+    <span class="dot"></span><span id="status-text">Initialisation…</span>
+  </div>
+</header>
+
+<div class="loader" id="loader" hidden>
+  <div class="loader-card">
+    <strong id="loader-title">Chargement du moteur de calcul</strong>
+    <p id="loader-msg">Python, numpy et scipy s'exécutent directement dans votre navigateur (WebAssembly). Le premier chargement télécharge ~30 Mo puis reste en cache.</p>
+    <div class="bar"><span id="loader-bar"></span></div>
+  </div>
+</div>
+
+<main>
+  <!-- ======================================================= BLACK-SCHOLES -->
+  <section class="page active" id="page-bs">
+    <aside class="panel">
+      <h2>Option</h2>
+      <div class="seg" data-name="bs-type">
+        <button class="on" data-value="call">Call</button><button data-value="put">Put</button>
+      </div>
+      <div class="fields">
+        <label>Spot S₀<input type="number" id="bs-S0" value="100" step="1" min="0.01"></label>
+        <label>Strike K<input type="number" id="bs-K" value="105" step="1" min="0.01"></label>
+        <label>Maturité T (ans)<input type="number" id="bs-T" value="1" step="0.25" min="0.01"></label>
+        <label>Volatilité σ<input type="number" id="bs-sigma" value="0.25" step="0.01" min="0.001"></label>
+        <label>Taux r<input type="number" id="bs-r" value="0.03" step="0.005"></label>
+        <label>Dividende q<input type="number" id="bs-q" value="0.01" step="0.005"></label>
+        <label>Trajectoires MC<input type="number" id="bs-n" value="50000" step="10000" min="1000"></label>
+      </div>
+      <div class="extra" id="bs-hedge-fields" hidden>
+        <h2>Couverture</h2>
+        <div class="fields">
+          <label>Vol réalisée σᵣ<input type="number" id="bs-sreal" value="0.15" step="0.01" min="0.001"></label>
+          <label>Tendance μ<input type="number" id="bs-mu" value="0.08" step="0.01"></label>
+          <label>Rebalancements<input type="number" id="bs-nreb" value="52" step="1" min="1"></label>
+          <label>Coût k (aller-retour)<input type="number" id="bs-cost" value="0.004" step="0.001" min="0"></label>
+          <label>Trajectoires<input type="number" id="bs-hn" value="10000" step="1000" min="500"></label>
+        </div>
+      </div>
+      <button class="primary" id="bs-run">Calculer</button>
+      <p class="hint" id="bs-hint">Formule fermée, Monte Carlo, QMC, EDP de Crank-Nicolson et arbre binomial sur la même option.</p>
+    </aside>
+
+    <div class="content">
+      <div class="subtabs" role="tablist">
+        <button class="subtab active" data-sub="overview">Prix &amp; Greeks</button>
+        <button class="subtab" data-sub="american">Option américaine</button>
+        <button class="subtab" data-sub="hedge">Couverture delta</button>
+      </div>
+
+      <div class="sub active" id="bs-overview">
+        <div class="kpis" id="bs-kpis"></div>
+        <div class="grid2">
+          <article class="card wide">
+            <header><h3>Une option, quatre méthodes</h3><span class="note">écart à la formule fermée</span></header>
+            <table class="data" id="bs-compare"></table>
+          </article>
+          <article class="card"><header><h3>Prix en fonction du spot</h3></header><div class="chart"><canvas id="c-bs-price"></canvas></div></article>
+          <article class="card"><header><h3>Delta Δ = ∂V/∂S</h3></header><div class="chart"><canvas id="c-bs-delta"></canvas></div></article>
+          <article class="card"><header><h3>Gamma Γ = ∂²V/∂S²</h3></header><div class="chart"><canvas id="c-bs-gamma"></canvas></div></article>
+          <article class="card"><header><h3>Les 15 Greeks</h3><span class="note">jusqu'à l'ordre 3</span></header><table class="data compact" id="bs-greeks"></table></article>
+        </div>
+      </div>
+
+      <div class="sub" id="bs-american">
+        <div class="kpis" id="am-kpis"></div>
+        <div class="grid2">
+          <article class="card wide"><header><h3>Frontière d'exercice optimal S*(t)</h3><span class="note">EDP, algorithme de Brennan-Schwartz</span></header><div class="chart tall"><canvas id="c-am-boundary"></canvas></div></article>
+        </div>
+        <p class="explain">Sous la frontière (put) il est optimal d'exercer immédiatement. Elle tend vers le strike à l'échéance. Sans dividende, un call américain n'est jamais exercé par anticipation (Merton 1973) : sa prime d'exercice anticipé est nulle.</p>
+      </div>
+
+      <div class="sub" id="bs-hedge">
+        <div class="kpis" id="hd-kpis"></div>
+        <div class="grid2">
+          <article class="card"><header><h3>Distribution du P&amp;L de couverture</h3><span class="note">vendeur couvert, valeur en T</span></header><div class="chart"><canvas id="c-hd-hist"></canvas></div></article>
+          <article class="card"><header><h3>Erreur de couverture vs fréquence</h3><span class="note">échelles log</span></header><div class="chart"><canvas id="c-hd-scaling"></canvas></div></article>
+          <article class="card wide" id="hd-scatter-card"><header><h3>Le P&amp;L réalisé est le « P&amp;L de gamma »</h3><span class="note">½ ∫ e^(r(T−t)) Γ S² (σ² − σᵣ²) dt</span></header><div class="chart"><canvas id="c-hd-scatter"></canvas></div></article>
+        </div>
+        <p class="explain" id="hd-explain"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= MONTE CARLO -->
+  <section class="page" id="page-mc">
+    <aside class="panel">
+      <h2>Modèle</h2>
+      <select id="mc-model">
+        <option value="bs">Black-Scholes</option>
+        <option value="heston">Heston (QE)</option>
+        <option value="merton">Merton (sauts)</option>
+        <option value="rbergomi">Rough Bergomi</option>
+        <option value="localvol">Vol locale (Dupire, SSVI)</option>
+      </select>
+      <div class="fields" id="mc-model-fields"></div>
+
+      <h2>Produit</h2>
+      <select id="mc-product">
+        <option value="european">Européenne</option>
+        <option value="digital">Digitale</option>
+        <option value="asian">Asiatique arithmétique</option>
+        <option value="barrier">Barrière (continue)</option>
+        <option value="lookback">Lookback à strike flottant</option>
+      </select>
+      <div class="seg" data-name="mc-type">
+        <button class="on" data-value="call">Call</button><button data-value="put">Put</button>
+      </div>
+      <div class="fields" id="mc-product-fields"></div>
+
+      <h2>Simulation</h2>
+      <div class="seg" data-name="mc-method">
+        <button class="on" data-value="pseudo">Pseudo-aléatoire</button><button data-value="sobol">QMC Sobol</button>
+      </div>
+      <div class="fields">
+        <label>Trajectoires<input type="number" id="mc-n" value="50000" step="10000" min="1000"></label>
+        <label>Graine<input type="number" id="mc-seed" value="42" step="1"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="mc-anti"> Variables antithétiques</label>
+      <label class="check"><input type="checkbox" id="mc-cv"> Variable de contrôle</label>
+      <button class="primary" id="mc-run">Valoriser</button>
+      <button class="secondary" id="mc-conv">Étude de convergence</button>
+    </aside>
+
+    <div class="content">
+      <div class="kpis" id="mc-kpis"></div>
+      <div class="grid2">
+        <article class="card"><header><h3>Trajectoires simulées</h3><span class="note" id="mc-paths-note">30 trajectoires</span></header><div class="chart"><canvas id="c-mc-paths"></canvas></div></article>
+        <article class="card"><header><h3>Distribution des flux actualisés</h3><span class="note">5 000 trajectoires</span></header><div class="chart"><canvas id="c-mc-hist"></canvas></div></article>
+        <article class="card wide" id="mc-conv-card" hidden><header><h3>Convergence : erreur standard en fonction de N</h3><span class="note" id="mc-conv-note">échelles log</span></header><div class="chart"><canvas id="c-mc-conv"></canvas></div></article>
+      </div>
+      <p class="explain" id="mc-explain">Choisissez un modèle et un produit puis « Valoriser ». Le prix est accompagné de son erreur standard et de son intervalle de confiance à 95 % ; quand une formule fermée existe, l'écart est exprimé en nombre d'erreurs standard.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>Librairie <a href="https://github.com/nicolleremanto/Monte-carlo-for-finance-">mcfin</a> — calculs exécutés par le code Python du dépôt.</span>
+  <a href="https://github.com/nicolleremanto/Monte-carlo-for-finance-/blob/HEAD/docs/BLACK_SCHOLES.md">Théorie Black-Scholes</a>
+  <a href="https://github.com/nicolleremanto/Monte-carlo-for-finance-/blob/HEAD/docs/THEORIE.md">Théorie Monte Carlo</a>
+</footer>
+<div class="toast" id="toast" role="alert" hidden></div>
+</body>
+</html>

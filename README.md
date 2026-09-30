@@ -7,11 +7,41 @@
 ![typage](https://img.shields.io/badge/typage-mypy-2a6db2)
 ![licence](https://img.shields.io/badge/licence-MIT-lightgrey)
 
+<p align="center">
+  <a href="https://nicolleremanto.github.io/Monte-carlo-for-finance-/app/"><img alt="Ouvrir l'interface" src="https://img.shields.io/badge/%E2%96%B6%20Ouvrir%20l'interface-dans%20le%20navigateur-2a78d6?style=for-the-badge"></a>
+</p>
+
 Librairie Python de **pricing et de gestion des risques par simulation**, couvrant les
 méthodes Monte Carlo utilisées sur les desks de dérivés actions, de taux et XVA.
 Chaque méthode est **validée contre une formule fermée ou un résultat publié** (suite de
 tests `pytest`), et la théorie est détaillée dans [`docs/THEORIE.md`](docs/THEORIE.md)
 et [`docs/BLACK_SCHOLES.md`](docs/BLACK_SCHOLES.md).
+
+## Interface graphique
+
+Une interface web permet d'utiliser la librairie sans écrire de code, en deux onglets :
+
+* **Black-Scholes** : prix et 15 Greeks, comparaison formule fermée / Monte Carlo / QMC / EDP /
+  arbre, option américaine et frontière d'exercice, simulation de couverture delta (erreur en
+  1/√n, P&L de gamma, coûts de Leland) ;
+* **Moteur Monte Carlo** : 5 modèles (Black-Scholes, Heston QE, Merton, rough Bergomi,
+  volatilité locale SSVI) × 5 produits (européenne, digitale, asiatique, barrière, lookback),
+  pseudo-aléatoire ou QMC Sobol, antithétiques, variables de contrôle, IC à 95 %, écart à la
+  formule fermée en erreurs standard, étude de convergence.
+
+Les calculs sont faits par **le code Python de ce dépôt** : dans le navigateur via
+[Pyodide](https://pyodide.org) (Python, numpy et scipy compilés en WebAssembly, aucun serveur),
+ou par un petit serveur local.
+
+| Accès | Comment |
+|---|---|
+| En ligne | bouton ci-dessus (GitHub Pages ; premier chargement ~20 s, ensuite en cache) |
+| En local (plus rapide) | `python app/serve.py` puis <http://localhost:8000/app/> |
+
+<p align="center">
+  <img src="docs/figures/app_black_scholes.png" width="49%" alt="Onglet Black-Scholes"/>
+  <img src="docs/figures/app_monte_carlo.png" width="49%" alt="Onglet Moteur Monte Carlo"/>
+</p>
 
 ## Contenu
 
@@ -136,7 +166,7 @@ cd examples && python 01_convergence_reduction_variance.py
 
 ## Qualité logicielle
 
-* **108 tests** (`pytest`) dont des **tests de propriétés** (*hypothesis*, 1 500 cas générés) : parité call-put,
+* **139 tests** (`pytest`) dont des **tests de propriétés** (*hypothesis*, 1 500 cas générés) : parité call-put,
   bornes d'arbitrage, convexité en strike, équation de Black-Scholes sur les Greeks, sur des
   centaines de jeux de paramètres tirés au hasard ;
 * tests **statistiques** : tolérances exprimées en erreurs standard, couverture des IC testée
@@ -164,6 +194,7 @@ mcfin/
 ├── rates/           hull_white.py, lmm.py, bermudan.py
 ├── risk/            xva.py, var.py
 └── engine.py        moteur : lots, RQMC, antithétiques, variables de contrôle, IS, Greeks CRN
+app/                 interface web : index.html, app.js, bridge.py (pont Python), worker.js (Pyodide), serve.py
 ```
 
 Principes de conception :
