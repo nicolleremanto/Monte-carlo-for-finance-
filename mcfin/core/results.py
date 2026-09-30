@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm, t as student_t
 
 __all__ = ["MCResult", "Paths", "mean_and_stderr"]
 
@@ -15,6 +15,9 @@ class MCResult:
 
     ``stderr`` est l'écart-type de l'estimateur (et non des tirages) :
     l'intervalle de confiance asymptotique (TCL) est price ± z_α stderr.
+    ``dof`` : degrés de liberté quand l'erreur est estimée sur peu de
+    répétitions indépendantes (QMC randomisé : R - 1) ; l'IC utilise alors le
+    quantile de Student au lieu du quantile gaussien.
     """
     price: float
     stderr: float
@@ -22,9 +25,11 @@ class MCResult:
     elapsed: float = 0.0
     method: str = ""
     extra: dict = field(default_factory=dict)
+    dof: int | None = None
 
     def ci(self, level: float = 0.95) -> tuple[float, float]:
-        z = norm.ppf(0.5 + level / 2)
+        p = 0.5 + level / 2
+        z = norm.ppf(p) if self.dof is None else student_t.ppf(p, self.dof)
         return self.price - z * self.stderr, self.price + z * self.stderr
 
     @property

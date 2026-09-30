@@ -51,29 +51,63 @@ def bs_price(S, K, T, r, sigma, q=0.0, option_type="call"):
 
 
 def bs_greeks(S, K, T, r, sigma, q=0.0, option_type="call") -> dict:
-    """Grecques analytiques (dérivées par rapport à S, σ, r, t).
+    """Grecques analytiques jusqu'à l'ordre 3.
 
-    vega/rho pour une variation de 1 (et non 1 %) ; theta en unité de temps
-    (année) : dV/dt = -dV/dT.
+    Conventions : dérivées « brutes » (vega, rho, epsilon pour une variation
+    de 1 et non de 1 %) ; les sensibilités au temps (theta, charm, color) sont
+    des dérivées par rapport au temps calendaire t, soit -∂/∂T.
+
+    ============  ==============================  ===========================
+    clé           définition                      usage desk
+    ============  ==============================  ===========================
+    delta         ∂V/∂S                           couverture en sous-jacent
+    gamma         ∂²V/∂S²                         convexité, P&L de gamma
+    vega          ∂V/∂σ                           risque de vol
+    theta         ∂V/∂t                           portage (Θ ≈ -½Γσ²S²)
+    rho           ∂V/∂r                           risque de taux
+    epsilon       ∂V/∂q                           risque dividende/repo
+    vanna         ∂²V/∂S∂σ                        skew / delta-vega croisé
+    volga         ∂²V/∂σ²  (vomma)                convexité en vol (smile)
+    charm         ∂Δ/∂t                           dérive du delta (« delta bleed »)
+    speed         ∂Γ/∂S                           stabilité du gamma
+    zomma         ∂Γ/∂σ                           gamma vs vol
+    color         ∂Γ/∂t                           dérive du gamma
+    ultima        ∂³V/∂σ³                         ordre 3 en vol
+    dual_delta    ∂V/∂K                           densité cumulée risque-neutre
+    dual_gamma    ∂²V/∂K²                         densité risque-neutre (Breeden-Litzenberger)
+    ============  ==============================  ===========================
     """
     S, K, T, r, q, sigma = map(lambda a: np.asarray(a, dtype=float), (S, K, T, r, q, sigma))
     w = option_sign(option_type)
     sqT = np.sqrt(T)
-    d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * sqT)
-    d2 = d1 - sigma * sqT
+    sT = sigma * sqT
+    d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / sT
+    d2 = d1 - sT
     dq, dr = np.exp(-q * T), np.exp(-r * T)
-    pdf1 = _pdf(d1)
+    pdf1, pdf2 = _pdf(d1), _pdf(d2)
     delta = w * dq * ndtr(w * d1)
-    gamma = dq * pdf1 / (S * sigma * sqT)
+    gamma = dq * pdf1 / (S * sT)
     vega = S * dq * pdf1 * sqT
     theta = (-S * dq * pdf1 * sigma / (2 * sqT)
              + w * q * S * dq * ndtr(w * d1) - w * r * K * dr * ndtr(w * d2))
     rho = w * K * T * dr * ndtr(w * d2)
+    epsilon = -w * S * T * dq * ndtr(w * d1)
     vanna = -dq * pdf1 * d2 / sigma
     volga = vega * d1 * d2 / sigma
+    # ∂d1/∂T et ∂d2/∂T interviennent dans charm et color
+    dd1_dT = (2 * (r - q) * T - d2 * sT) / (2 * T * sT)
+    charm = w * q * dq * ndtr(w * d1) - dq * pdf1 * dd1_dT
+    speed = -gamma / S * (d1 / sT + 1.0)
+    zomma = gamma * (d1 * d2 - 1.0) / sigma
+    color = gamma * (q + 1.0 / (2 * T) + d1 * dd1_dT)
+    ultima = -vega / sigma**2 * (d1 * d2 * (1 - d1 * d2) + d1**2 + d2**2)
+    dual_delta = -w * dr * ndtr(w * d2)
+    dual_gamma = dr * pdf2 / (K * sT)
     return {"price": bs_price(S, K, T, r, sigma, q, option_type), "delta": delta,
-            "gamma": gamma, "vega": vega, "theta": theta, "rho": rho,
-            "vanna": vanna, "volga": volga}
+            "gamma": gamma, "vega": vega, "theta": theta, "rho": rho, "epsilon": epsilon,
+            "vanna": vanna, "volga": volga, "charm": charm, "speed": speed, "zomma": zomma,
+            "color": color, "ultima": ultima, "dual_delta": dual_delta,
+            "dual_gamma": dual_gamma}
 
 
 def bs_digital_price(S, K, T, r, sigma, q=0.0, option_type="call"):

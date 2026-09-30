@@ -214,7 +214,8 @@ class MonteCarloEngine:
             + (f"+{self.construction}" if self.construction != "standard" else "") \
             + (f"+strat{self.n_strata}" if self.n_strata else "") \
             + ("+CV" if control_variates else "") + ("+IS" if drift_shift is not None else "")
-        return MCResult(price, stderr, self.n_paths, time.perf_counter() - t0, desc, extra)
+        dof = self.n_randomizations - 1 if self.method == "sobol" else None
+        return MCResult(price, stderr, self.n_paths, time.perf_counter() - t0, desc, extra, dof)
 
     # ------------------------------------------------------------------
     def greeks(self, model: Model, product, params: dict[str, float] | None = None,
